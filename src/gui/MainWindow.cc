@@ -124,6 +124,7 @@
 #include "gui/ColorList.h"
 #include "gui/Dock.h"
 #include "gui/ai/AIDock.h"
+#include "gui/PhoneLink.h"
 #include "gui/Editor.h"
 #include "gui/Export3mfDialog.h"
 #include "gui/ExportPdfDialog.h"
@@ -311,6 +312,7 @@ MainWindow::MainWindow(const QStringList& filenames) : rubberBandManager(this)
   setupPreferences();
 
   restoreWindowState();
+  PhoneLink::install(this);
 
   this->hideFind();
   show();

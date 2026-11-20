@@ -1404,6 +1404,7 @@ set(GUI_SOURCES
   src/gui/ai/ChatWidget.cc
   src/gui/ai/ChatInputEdit.cc
   src/gui/ai/ViewportGrabber.cc
+  src/gui/PhoneLink.cc
   ${INPUT_DRIVER_SOURCES}
   )
 
@@ -1475,6 +1476,7 @@ set(GUI_HEADERS
     src/gui/parameter/ParameterVirtualWidget.h
     src/gui/parameter/ParameterWidget.h
     src/gui/ai/AIDock.h
+    src/gui/PhoneLink.h
     src/gui/ai/ChatWidget.h
     src/gui/ai/DiffDialog.h
     src/gui/ai/CollapsibleBubble.h
