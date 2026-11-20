@@ -342,18 +342,20 @@ QByteArray PhoneLink::pageHtml()
 {
   static const char *html = R"HTML(<!doctype html>
 <html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#16181d">
 <title>OpenSCAD Phone Link</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;font-family:system-ui,sans-serif;background:#16181d;color:#e8e8e8}
+html,body{margin:0;background:#16181d;color:#e8e8e8;font-family:system-ui,sans-serif;overscroll-behavior:none}
 header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#20232a}
 header b{font-size:16px}#st{font-size:12px;color:#9aa}
 .tabs{display:flex;background:#20232a;border-top:1px solid #2c3038}
 .tabs button{flex:1;padding:12px;background:none;border:0;color:#9aa;font-size:15px}
 .tabs button.on{color:#f9d72c;border-bottom:2px solid #f9d72c}
 section{display:none;padding:10px}section.on{display:block}
-#view{width:100%;aspect-ratio:4/3;object-fit:contain;background:#000;border-radius:8px;touch-action:none;display:block}
+#view{width:100%;height:auto;min-height:200px;object-fit:contain;background:#000;border-radius:8px;
+ touch-action:none;display:block;user-select:none;-webkit-user-select:none}
 .row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
 .row.two{grid-template-columns:1fr 1fr}
 button.b{padding:13px 4px;border:0;border-radius:8px;background:#2c3038;color:#eee;font-size:14px}
@@ -362,26 +364,51 @@ button.g{background:#2f7d4f;color:#fff;font-weight:600}
 textarea{width:100%;height:60vh;background:#0f1115;color:#e8e8e8;border:1px solid #2c3038;border-radius:8px;
  padding:10px;font:13px/1.4 ui-monospace,Consolas,monospace}
 #msg{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#333;padding:10px 16px;
- border-radius:20px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none}
+ border-radius:20px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:30}
 label{font-size:13px;color:#9aa;display:flex;gap:6px;align-items:center;margin-top:10px}
+.hint{font-size:12px;color:#778;margin-top:6px}
+/* Full-screen mode: only the 3D view, plus a small toolbar that a tap shows/hides */
+#bar{display:none}
+body.full header,body.full .tabs,body.full .ctl{display:none}
+body.full section#v{padding:0}
+body.full #view{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;border-radius:0;min-height:0}
+body.full #bar{display:flex;position:fixed;left:8px;right:8px;bottom:max(10px,env(safe-area-inset-bottom));
+ gap:6px;justify-content:center;flex-wrap:wrap;z-index:20;transition:opacity .25s}
+body.full.nobar #bar{opacity:0;pointer-events:none}
+body.full #msg{bottom:auto;top:max(18px,env(safe-area-inset-top))}
+#bar button{padding:10px 12px;border:0;border-radius:20px;background:rgba(32,35,42,.82);color:#eee;font-size:14px;
+ backdrop-filter:blur(4px)}
+#bar button.p{background:rgba(249,215,44,.92);color:#111;font-weight:600}
 </style></head><body>
 <header><b id="file">OpenSCAD</b><span id="st">connecting...</span></header>
 <div class="tabs"><button class="on" data-t="v">View</button><button data-t="c">Code</button></div>
 <section id="v" class="on">
- <img id="view" alt="viewport">
+ <img id="view" alt="viewport" draggable="false">
+ <div class="ctl">
  <div class="row two"><button class="b p" data-a="designActionPreview">Preview (F5)</button>
   <button class="b p" data-a="designActionRender">Render (F6)</button></div>
  <div class="row"><button class="b" data-a="viewActionTop">Top</button><button class="b" data-a="viewActionFront">Front</button>
   <button class="b" data-a="viewActionRight">Right</button><button class="b" data-a="viewActionDiagonal">Iso</button></div>
  <div class="row"><button class="b" data-z="120">Zoom +</button><button class="b" data-z="-120">Zoom -</button>
   <button class="b" data-a="viewActionViewAll">Fit</button><button class="b" data-a="viewActionResetView">Reset</button></div>
- <div class="row two"><button class="b g" id="stl">Download STL</button><button class="b" id="ref">Refresh</button></div>
+ <div class="row two"><button class="b g" id="stl">Download STL</button><button class="b" id="fs">&#x26F6; Full screen</button></div>
  <label><input type="checkbox" id="live" checked> Live view (updates every 2s)</label>
+ <div class="hint">Drag to rotate &middot; pinch to zoom &middot; double-tap to fit</div>
+ </div>
 </section>
 <section id="c">
  <textarea id="code" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>
  <div class="row two"><button class="b" id="pull">Load from PC</button><button class="b p" id="push">Send + Preview</button></div>
 </section>
+<div id="bar">
+ <button id="fsx">&#x2715; Exit</button>
+ <button class="p" data-a="designActionPreview">F5</button>
+ <button class="p" data-a="designActionRender">F6</button>
+ <button data-a="viewActionDiagonal">Iso</button>
+ <button data-a="viewActionTop">Top</button>
+ <button data-a="viewActionFront">Front</button>
+ <button data-a="viewActionViewAll">Fit</button>
+</div>
 <div id="msg"></div>
 <script>
 const k=new URLSearchParams(location.search).get('k')||'';
@@ -397,9 +424,9 @@ function soon(){refresh();setTimeout(refresh,700);setTimeout(refresh,2000);}
 async function status(){try{const s=await (await call('/api/status')).json();$('file').textContent=s.file;
  $('st').textContent=(s.errors?s.errors+' errors · ':'')+(s.stlReady?'STL ready':'connected');}
  catch(e){$('st').textContent=e.message;}}
-document.querySelectorAll('[data-a]').forEach(b=>b.onclick=async()=>{try{await call('/api/action?name='+b.dataset.a,{method:'POST'});soon();status();}catch(e){toast(e.message)}});
+async function act(name){try{await call('/api/action?name='+name,{method:'POST'});soon();status();}catch(e){toast(e.message)}}
+document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>act(b.dataset.a));
 document.querySelectorAll('[data-z]').forEach(b=>b.onclick=async()=>{try{await call('/api/zoom?d='+b.dataset.z,{method:'POST'});refresh();}catch(e){toast(e.message)}});
-$('ref').onclick=()=>{refresh();status();};
 $('stl').onclick=async()=>{try{const s=await (await call('/api/status')).json();
  if(!s.stlReady){toast('Press Render (F6) first');return;}location.href=q('/api/model.stl');}catch(e){toast(e.message)}};
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
@@ -408,15 +435,38 @@ document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
 async function pull(){try{$('code').value=await (await call('/api/code')).text();toast('Loaded from PC');}catch(e){toast(e.message)}}
 $('pull').onclick=pull;
 $('push').onclick=async()=>{try{await call('/api/code?preview=1',{method:'POST',body:$('code').value});toast('Sent to PC');soon();status();}catch(e){toast(e.message)}};
-// Drag on the picture to orbit the camera.
-let drag=null,acc=[0,0],sending=false;
-const v=$('view');
-v.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY];v.setPointerCapture(e.pointerId);});
-v.addEventListener('pointermove',e=>{if(!drag)return;acc[0]+=e.clientX-drag[0];acc[1]+=e.clientY-drag[1];drag=[e.clientX,e.clientY];});
-const end=()=>{drag=null;};v.addEventListener('pointerup',end);v.addEventListener('pointercancel',end);
-setInterval(async()=>{if(sending||(!acc[0]&&!acc[1]))return;const dx=acc[0]*0.7,dy=acc[1]*0.7;acc=[0,0];sending=true;
- try{await call('/api/rotate?dx='+dx.toFixed(1)+'&dy='+dy.toFixed(1),{method:'POST'});refresh();}catch(e){toast(e.message)}sending=false;},150);
-setInterval(()=>{if($('live').checked&&!drag&&!document.hidden)refresh();},2000);
+
+// ---- Full screen ----
+function setFull(on){document.body.classList.toggle('full',on);document.body.classList.remove('nobar');
+ const de=document.documentElement;
+ try{if(on&&de.requestFullscreen&&!document.fullscreenElement)de.requestFullscreen().catch(()=>{});
+  if(!on&&document.fullscreenElement)document.exitFullscreen().catch(()=>{});}catch(_){}
+ if(on)toast('Tap the model to show/hide buttons');refresh();}
+$('fs').onclick=()=>setFull(true);
+$('fsx').onclick=()=>setFull(false);
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)document.body.classList.remove('full');});
+
+// ---- Touch: 1 finger rotates, 2 fingers pinch-zoom, tap toggles toolbar, double-tap fits ----
+const v=$('view'),pts=new Map();let acc=[0,0],zacc=0,sending=false,pinch=0,down=null,lastTap=0,moved=0;
+v.addEventListener('pointerdown',e=>{v.setPointerCapture(e.pointerId);pts.set(e.pointerId,[e.clientX,e.clientY]);
+ if(pts.size===1){down={t:Date.now()};moved=0;}else{pinch=dist();}});
+function dist(){const a=[...pts.values()];return a.length<2?0:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]);}
+v.addEventListener('pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;
+ const dx=e.clientX-p[0],dy=e.clientY-p[1];pts.set(e.pointerId,[e.clientX,e.clientY]);moved+=Math.abs(dx)+Math.abs(dy);
+ if(pts.size===1){acc[0]+=dx;acc[1]+=dy;}
+ else if(pts.size===2){const d=dist();zacc+=(d-pinch)*3;pinch=d;}});
+function up(e){pts.delete(e.pointerId);if(pts.size===1)pinch=0;
+ if(pts.size===0&&down){const quick=Date.now()-down.t<300&&moved<10;down=null;
+  if(quick){const now=Date.now();
+   if(now-lastTap<350){lastTap=0;act('viewActionViewAll');}
+   else{lastTap=now;setTimeout(()=>{if(lastTap===now&&document.body.classList.contains('full'))document.body.classList.toggle('nobar');},360);}}}}
+v.addEventListener('pointerup',up);v.addEventListener('pointercancel',up);
+setInterval(async()=>{if(sending||(!acc[0]&&!acc[1]&&!zacc))return;sending=true;
+ const dx=acc[0]*0.7,dy=acc[1]*0.7,dz=zacc;acc=[0,0];zacc=0;
+ try{if(dx||dy)await call('/api/rotate?dx='+dx.toFixed(1)+'&dy='+dy.toFixed(1),{method:'POST'});
+  if(dz)await call('/api/zoom?d='+dz.toFixed(0),{method:'POST'});refresh();}catch(e){toast(e.message)}
+ sending=false;},150);
+setInterval(()=>{if($('live').checked&&!pts.size&&!document.hidden)refresh();},2000);
 setInterval(()=>{if(!document.hidden)status();},4000);
 refresh();status();
 </script></body></html>)HTML";
