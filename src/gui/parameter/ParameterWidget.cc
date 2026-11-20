@@ -159,6 +159,33 @@ void ParameterWidget::applyParameters(SourceFile *sourceFile)
   this->parameters.apply(sourceFile);
 }
 
+NumberParameter *ParameterWidget::findNumberParameter(const std::string& name) const
+{
+  for (const auto& parameter : this->parameters) {
+    if (parameter->name() == name && parameter->type() == ParameterObject::ParameterType::Number) {
+      return static_cast<NumberParameter *>(parameter.get());
+    }
+  }
+  return nullptr;
+}
+
+void ParameterWidget::setNumberParameter(const std::string& name, double value)
+{
+  NumberParameter *parameter = findNumberParameter(name);
+  if (!parameter) return;
+  parameter->value = value;
+
+  // Keep the active preset (if any) in step, so reloading it doesn't snap the part back.
+  const int index = comboBoxPreset->currentIndex();
+  if (index > 0 && static_cast<size_t>(index - 1) < sets.size()) {
+    sets[index - 1][parameter->name()] = parameter->exportValue();
+  }
+  auto it = widgets.find(parameter);
+  if (it != widgets.end()) {
+    for (ParameterVirtualWidget *widget : it->second) widget->setValue();
+  }
+}
+
 bool ParameterWidget::childHasFocus()
 {
   if (this->hasFocus()) {

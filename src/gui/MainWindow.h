@@ -76,6 +76,7 @@ class MainWindow : public QMainWindow, public Ui::MainWindow, public InputEventH
   Q_OBJECT
 
   friend UXTest;
+  friend class JointDragger;
 
 public:
   Preferences *prefs;

@@ -63,6 +63,10 @@ public:
   bool childHasFocus();
   bool isModified() const { return modified; }
 
+  // Used by JointDragger (Move Parts): look up / change a numeric parameter by name.
+  NumberParameter *findNumberParameter(const std::string& name) const;
+  void setNumberParameter(const std::string& name, double value);
+
 public slots:
   void setModified(bool modified = true);
   void setFontFamilySize(const QString& fontfamily, uint fontsize);

@@ -125,6 +125,7 @@
 #include "gui/Dock.h"
 #include "gui/ai/AIDock.h"
 #include "gui/PhoneLink.h"
+#include "gui/JointDragger.h"
 #include "gui/Editor.h"
 #include "gui/Export3mfDialog.h"
 #include "gui/ExportPdfDialog.h"
@@ -313,6 +314,7 @@ MainWindow::MainWindow(const QStringList& filenames) : rubberBandManager(this)
 
   restoreWindowState();
   PhoneLink::install(this);
+  new JointDragger(this);  // View > Move Parts
 
   this->hideFind();
   show();

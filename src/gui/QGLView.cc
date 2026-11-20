@@ -242,6 +242,11 @@ void QGLView::paintGL()
 
 void QGLView::mousePressEvent(QMouseEvent *event)
 {
+  if (event->button() == Qt::LeftButton && !mouse_drag_active && partGrabBegin &&
+      partGrabBegin(event->pos())) {
+    part_grab_active = true;
+    return;
+  }
   if (!mouse_drag_active) {
     mouse_drag_moved = false;
   }
@@ -351,6 +356,10 @@ void QGLView::normalizeAngle(GLdouble& angle)
 
 void QGLView::mouseMoveEvent(QMouseEvent *event)
 {
+  if (part_grab_active) {
+    if (partGrabMove) partGrabMove(event->pos());
+    return;
+  }
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
   auto this_mouse = event->globalPosition();
 #else
@@ -446,6 +455,11 @@ void QGLView::mouseMoveEvent(QMouseEvent *event)
 
 void QGLView::mouseReleaseEvent(QMouseEvent *event)
 {
+  if (part_grab_active) {
+    part_grab_active = false;
+    if (partGrabEnd) partGrabEnd();
+    return;
+  }
   mouse_drag_active = false;
   releaseMouse();
 

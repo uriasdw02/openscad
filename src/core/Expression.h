@@ -33,6 +33,8 @@ public:
   enum class Op { Not, BinaryNot, Negate };
   [[nodiscard]] bool isLiteral() const override;
   UnaryOp(Op op, Expression *expr, const Location& loc);
+  [[nodiscard]] Op getOp() const { return op; }
+  [[nodiscard]] const std::shared_ptr<Expression>& getExpr() const { return expr; }
   [[nodiscard]] Value evaluate(const std::shared_ptr<const Context>& context) const override;
   void print(std::ostream& stream, const std::string& indent) const override;
 
@@ -68,6 +70,9 @@ public:
   };
 
   BinaryOp(Expression *left, Op op, Expression *right, const Location& loc);
+  [[nodiscard]] Op getOp() const { return op; }
+  [[nodiscard]] const std::shared_ptr<Expression>& getLeft() const { return left; }
+  [[nodiscard]] const std::shared_ptr<Expression>& getRight() const { return right; }
   [[nodiscard]] Value evaluate(const std::shared_ptr<const Context>& context) const override;
   void print(std::ostream& stream, const std::string& indent) const override;
 

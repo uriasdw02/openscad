@@ -119,6 +119,14 @@ private slots:
   void display_opencsg_warning_dialog();
 #endif
 
+public:
+  // "Move Parts" hooks. If partGrabBegin returns true on a left press, the drag
+  // is routed to partGrabMove/partGrabEnd instead of orbiting the camera.
+  std::function<bool(QPoint)> partGrabBegin;
+  std::function<void(QPoint)> partGrabMove;
+  std::function<void()> partGrabEnd;
+  bool part_grab_active = false;
+
 signals:
   void cameraChanged();
   void resized();
