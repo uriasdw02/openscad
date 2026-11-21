@@ -201,10 +201,8 @@ ChatWidget::ChatWidget(QWidget *parent) : QWidget(parent)
                "\"draw a sphere\" or \"create a box with a hole\"."),
              false);
 
-  std::string defPrompt = aiService->getDefaultPrompt();
-  if (!defPrompt.empty()) {
-    inputField->setPlainText(QString::fromStdString(defPrompt));
-  }
+  // The input box starts blank (the old "Default User Prompt" prefill is no longer used).
+  inputField->setPlaceholderText(tr("Ask AI... or attach a sketch / photo / BOM and press Send"));
 
   // Initialize diff proposal banner
   diffBannerWidget = new QWidget(this);
