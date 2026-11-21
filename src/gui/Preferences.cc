@@ -1504,9 +1504,9 @@ void Preferences::on_pushButtonAINewProfile_clicked()
   newProfile["apiKey"] = "";
 
   nlohmann::json params = nlohmann::json::object();
-  params["model"] = "custom";
-  params["temperature"] = 0.7;
-  params["max_tokens"] = 2048;
+  params["model"] = "auto";   // asks the server which model it has
+  params["temperature"] = 0.3;
+  params["max_tokens"] = 8192;
   params["system_prompt"] =
     "You are the OpenSCAD Expert Assistant. You provide high-quality, surgical, and logical OpenSCAD "
     "code fixes.\n\n"
@@ -1647,13 +1647,13 @@ void Preferences::loadAIParams(const QString& profileName)
     paramsObj["model"] =
       (profileName.contains("Ollama") || profileName.toLower() == "ollamaprofile")
         ? "deepseek-coder"
-        : ((profileName.contains("OpenAI") || profileName.toLower() == "openai") ? "gpt-4o" : "custom");
+        : ((profileName.contains("OpenAI") || profileName.toLower() == "openai") ? "gpt-4o" : "auto");
   }
   if (!paramsObj.contains("temperature")) {
     paramsObj["temperature"] = 0.7;
   }
   if (!paramsObj.contains("max_tokens")) {
-    paramsObj["max_tokens"] = 2048;
+    paramsObj["max_tokens"] = 8192;  // room for reading a sketch (2048 cut answers off)
   }
   if (!paramsObj.contains("context_limit")) {
     paramsObj["context_limit"] = 10;

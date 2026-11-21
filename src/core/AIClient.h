@@ -68,6 +68,10 @@ public:
   void cancelPendingRequests();
 
 private:
+  // model "" or "auto": look up the server's model first (see AIClient.cc)
+  bool resolveModel(const AIProfileConfig& config, std::function<void(const AIProfileConfig&)> then,
+                    ErrorCallback on_error);
+
   class Impl;
   std::unique_ptr<Impl> impl;
 };

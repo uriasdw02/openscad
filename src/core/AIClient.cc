@@ -1,6 +1,8 @@
 #include "AIClient.h"
 #include "HTTPClient.h"
+#include <algorithm>
 #include <cctype>
+#include <functional>
 #include <sstream>
 
 class SSEParser
@@ -30,6 +32,10 @@ public:
       processLine(buffer_);
       buffer_.clear();
     }
+    if (in_reasoning_) {
+      callback_("\n</think>\n\n");
+      in_reasoning_ = false;
+    }
   }
 
   const std::vector<AIToolCall>& toolCalls() const { return tool_calls_; }
@@ -38,6 +44,26 @@ private:
   std::string buffer_;
   TextCallback callback_;
   std::vector<AIToolCall> tool_calls_;
+  bool in_reasoning_ = false;
+
+  // Reasoning ("thinking") text is wrapped in <think> ... </think> so the chat can
+  // keep it out of code extraction and out of the history sent back to the model.
+  void emitReasoning(const std::string& text)
+  {
+    if (!in_reasoning_) {
+      callback_("<think>\n");
+      in_reasoning_ = true;
+    }
+    callback_(text);
+  }
+  void emitContent(const std::string& text)
+  {
+    if (in_reasoning_) {
+      callback_("\n</think>\n\n");
+      in_reasoning_ = false;
+    }
+    callback_(text);
+  }
 
   void processLine(const std::string& line)
   {
@@ -70,17 +96,17 @@ private:
         auto& choice = json["choices"][0];
         if (choice.contains("delta") && choice["delta"].is_object()) {
           auto& delta = choice["delta"];
-          if (delta.contains("content")) {
+          if (delta.contains("content") && delta["content"].is_string()) {
             std::string text = delta["content"].get<std::string>();
             if (!text.empty()) {
-              callback_(text);
+              emitContent(text);
               matched = true;
             }
           }
-          if (delta.contains("reasoning_content")) {
+          if (delta.contains("reasoning_content") && delta["reasoning_content"].is_string()) {
             std::string text = delta["reasoning_content"].get<std::string>();
             if (!text.empty()) {
-              callback_(text);
+              emitReasoning(text);
               matched = true;
             }
           }
@@ -116,17 +142,17 @@ private:
       // Ollama /api/chat format (content and thinking)
       if (!matched && json.contains("message") && json["message"].is_object()) {
         auto& message = json["message"];
-        if (message.contains("content")) {
+        if (message.contains("content") && message["content"].is_string()) {
           std::string text = message["content"].get<std::string>();
           if (!text.empty()) {
-            callback_(text);
+            emitContent(text);
             matched = true;
           }
         }
-        if (message.contains("thinking")) {
+        if (message.contains("thinking") && message["thinking"].is_string()) {
           std::string text = message["thinking"].get<std::string>();
           if (!text.empty()) {
-            callback_(text);
+            emitReasoning(text);
             matched = true;
           }
         }
@@ -161,7 +187,7 @@ private:
       if (!matched && json.contains("response")) {
         std::string text = json["response"].get<std::string>();
         if (!text.empty()) {
-          callback_(text);
+          emitContent(text);
           matched = true;
         }
       }
@@ -170,7 +196,7 @@ private:
       if (!matched && json.contains("thinking")) {
         std::string text = json["thinking"].get<std::string>();
         if (!text.empty()) {
-          callback_(text);
+          emitReasoning(text);
           matched = true;
         }
       }
@@ -184,6 +210,8 @@ class AIClient::Impl
 {
 public:
   std::shared_ptr<HTTPClient> http_client;
+  std::string resolved_model;     // model id found on the server ("auto")
+  std::string resolved_endpoint;  // endpoint it was found on
 
   Impl(std::shared_ptr<HTTPClient> client) : http_client(std::move(client)) {}
   ~Impl() = default;
@@ -311,10 +339,98 @@ nlohmann::json getOpenSCADTools()
   return tools;
 }
 
+// ---- "auto" model: ask the server which model it has (llama.cpp, LM Studio, Ollama /v1) ----
+namespace {
+
+bool wantsAutoModel(const AIProfileConfig& config)
+{
+  std::string m = config.model;
+  std::transform(m.begin(), m.end(), m.begin(), [](unsigned char c) { return std::tolower(c); });
+  if (!(m.empty() || m == "auto")) return false;
+  // native Ollama endpoints use their own model listing - leave those alone
+  return config.endpoint.find("/api/chat") == std::string::npos &&
+         config.endpoint.find("/generate") == std::string::npos;
+}
+
+std::string modelsUrl(const std::string& endpoint)
+{
+  std::string base = endpoint;
+  const std::string suffix = "/chat/completions";
+  if (base.size() >= suffix.size() && base.compare(base.size() - suffix.size(), suffix.size(), suffix) == 0) {
+    base.erase(base.size() - suffix.size());
+  }
+  while (!base.empty() && base.back() == '/') base.pop_back();
+  return base + "/models";
+}
+
+std::string firstModelId(const std::string& body)
+{
+  auto json = nlohmann::json::parse(body, nullptr, false);
+  if (json.is_discarded()) return {};
+  if (json.contains("data") && json["data"].is_array()) {
+    for (auto& m : json["data"]) {
+      if (m.contains("id") && m["id"].is_string()) return m["id"].get<std::string>();
+    }
+  }
+  if (json.contains("models") && json["models"].is_array()) {
+    for (auto& m : json["models"]) {
+      for (const char *key : {"model", "name", "id"}) {
+        if (m.contains(key) && m[key].is_string()) return m[key].get<std::string>();
+      }
+    }
+  }
+  return {};
+}
+
+}  // namespace
+
+// Calls `then` with a config whose model is filled in. Returns false if no lookup was needed.
+bool AIClient::resolveModel(const AIProfileConfig& config, std::function<void(const AIProfileConfig&)> then,
+                            ErrorCallback on_error)
+{
+  if (!wantsAutoModel(config)) return false;
+  if (!impl->resolved_model.empty() && impl->resolved_endpoint == config.endpoint) {
+    AIProfileConfig c = config;
+    c.model = impl->resolved_model;
+    then(c);
+    return true;
+  }
+  HTTPClient::Headers headers;
+  if (!config.apiKey.empty()) headers["Authorization"] = "Bearer " + config.apiKey;
+  Impl *im = impl.get();
+  impl->http_client->asyncGet(
+    modelsUrl(config.endpoint), headers,
+    [im, config, then, on_error](int status, const std::string& body) {
+      const std::string id = (status >= 200 && status < 300) ? firstModelId(body) : std::string();
+      if (id.empty()) {
+        if (on_error) {
+          on_error("Couldn't find a model on " + modelsUrl(config.endpoint) +
+                   ". Set the 'model' parameter in Preferences -> AI.");
+        }
+        return;
+      }
+      im->resolved_model = id;
+      im->resolved_endpoint = config.endpoint;
+      AIProfileConfig c = config;
+      c.model = id;
+      then(c);
+    },
+    on_error);
+  return true;
+}
+
 void AIClient::sendChatCompletion(const AIProfileConfig& config,
                                   const std::vector<AIChatMessage>& history,
                                   ResponseCallback on_response, ErrorCallback on_error)
 {
+  if (resolveModel(
+        config,
+        [this, history, on_response, on_error](const AIProfileConfig& c) {
+          sendChatCompletion(c, history, on_response, on_error);
+        },
+        on_error)) {
+    return;
+  }
   nlohmann::json payload = nlohmann::json::object();
   payload["model"] = config.model;
   payload["stream"] = false;
@@ -471,6 +587,14 @@ void AIClient::sendChatCompletionStream(const AIProfileConfig& config,
                                         ChunkCallback on_chunk, ErrorCallback on_error,
                                         CompleteCallback on_complete)
 {
+  if (resolveModel(
+        config,
+        [this, history, on_chunk, on_error, on_complete](const AIProfileConfig& c) {
+          sendChatCompletionStream(c, history, on_chunk, on_error, on_complete);
+        },
+        on_error)) {
+    return;
+  }
   nlohmann::json payload = nlohmann::json::object();
   payload["model"] = config.model;
   payload["stream"] = true;

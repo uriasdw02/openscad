@@ -28,6 +28,42 @@
 #include "glview/Camera.h"
 #include "gui/Console.h"
 
+namespace {
+
+// Remove <think> ... </think> reasoning (wrapped by AIClient, or written inline by
+// some models) so it isn't mistaken for the answer or sent back as history.
+std::string stripThinking(std::string text)
+{
+  for (;;) {
+    const size_t a = text.find("<think>");
+    if (a == std::string::npos) break;
+    const size_t b = text.find("</think>", a);
+    text.erase(a, b == std::string::npos ? std::string::npos : b + 8 - a);
+  }
+  return text;
+}
+
+// Last fenced code block in the answer (models usually put the final version last).
+std::string lastCodeBlock(const std::string& text)
+{
+  std::string found;
+  size_t pos = 0;
+  for (;;) {
+    const size_t start = text.find("```", pos);
+    if (start == std::string::npos) break;
+    const size_t code_start = text.find('\n', start);
+    if (code_start == std::string::npos) break;
+    const size_t end = text.find("```", code_start);
+    if (end == std::string::npos) break;
+    std::string code = text.substr(code_start + 1, end - (code_start + 1));
+    if (!code.empty()) found = code;
+    pos = end + 3;
+  }
+  return found;
+}
+
+}  // namespace
+
 // MessageBubble implementation
 MessageBubble::MessageBubble(const QString& text, bool isUser,
                              const std::vector<ImageAttachment>& images, QWidget *parent)
@@ -297,7 +333,7 @@ void ChatWidget::onSendPressed()
         stop_msg += "\n\n*[Request Stopped by User]*";
         activeAIBubble->updateText(QString::fromStdString(stop_msg));
         if (activeResponseText && !activeResponseText->empty()) {
-          this->history.push_back({"assistant", *activeResponseText});
+          this->history.push_back({"assistant", stripThinking(*activeResponseText)});
         }
       }
     }
@@ -421,24 +457,14 @@ void ChatWidget::onSendPressed()
             activeAIBubble = nullptr;
           }
         } else if (activeResponseText) {
-          this->history.push_back({"assistant", *activeResponseText});
+          this->history.push_back({"assistant", stripThinking(*activeResponseText)});
           // Fallback: if the model wrote a code block in chat text without calling
           // set_editor_code (e.g. a local server without tool support), offer it
           // with the Review & Apply banner. Skipped when a tool already applied code.
           if (!codeToolUsed && !this->hasPendingCodeChanges()) {
-            std::string text = *activeResponseText;
-            size_t start = text.find("```");
-            if (start != std::string::npos) {
-              size_t code_start = text.find('\n', start);
-              if (code_start != std::string::npos) {
-                size_t end = text.find("```", code_start);
-                if (end != std::string::npos) {
-                  std::string code = text.substr(code_start + 1, end - (code_start + 1));
-                  if (!code.empty()) {
-                    this->proposeCodeChange(code);
-                  }
-                }
-              }
+            const std::string code = lastCodeBlock(stripThinking(*activeResponseText));
+            if (!code.empty()) {
+              this->proposeCodeChange(code);
             }
           }
         }
