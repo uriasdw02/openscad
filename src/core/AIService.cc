@@ -52,6 +52,9 @@ READING AN ISOMETRIC SKETCH
 - EAST = the other diagonal axis, on the side you reach turning CLOCKWISE from north:
     north up-right -> east down-right;   north up-left -> east up-right.
   South and west are the opposites.
+- Every straight horizontal leg drawn ALONG an iso axis is exactly one of N, S, E, W.
+  Do NOT write NE / NW / SE / SW for those: diagonal names mean a 45-degree run in plan and are only
+  for legs drawn between the iso axes (rolling offsets, 45s), which are usually marked with a 45.
 - Each dimension is work point to work point: elbow centerlines, tee centers, flange faces, valve faces.
 - Follow the pipe from one end to the other and write the legs in that order.
 - A dimension that spans several items (overall) is NOT a leg: use the individual dimensions.
