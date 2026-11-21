@@ -95,6 +95,41 @@ FLANGE_150 = [
   [24,  32.00, 1.88, 6.00, 27.25, 29.50, 20, 1.38]
 ];
 
+// ---------------- B16.5 Class 300 weld-neck flange (inches) ----------------
+// same columns as FLANGE_150
+FLANGE_300 = [
+  [0.5,  3.75, 0.56, 2.06,  1.38,  2.62,  4, 0.62],
+  [0.75, 4.62, 0.62, 2.25,  1.69,  3.25,  4, 0.75],
+  [1,    4.88, 0.69, 2.44,  2.00,  3.50,  4, 0.75],
+  [1.25, 5.25, 0.75, 2.56,  2.50,  3.88,  4, 0.75],
+  [1.5,  6.12, 0.81, 2.69,  2.88,  4.50,  4, 0.88],
+  [2,    6.50, 0.88, 2.75,  3.62,  5.00,  8, 0.75],
+  [2.5,  7.50, 1.00, 3.00,  4.12,  5.88,  8, 0.88],
+  [3,    8.25, 1.12, 3.12,  5.00,  6.62,  8, 0.88],
+  [3.5,  9.00, 1.19, 3.19,  5.50,  7.25,  8, 0.88],
+  [4,   10.00, 1.25, 3.38,  6.19,  7.88,  8, 0.88],
+  [5,   11.00, 1.38, 3.88,  7.31,  9.25,  8, 0.88],
+  [6,   12.50, 1.44, 3.88,  8.50, 10.62, 12, 0.88],
+  [8,   15.00, 1.62, 4.38, 10.62, 13.00, 12, 1.00],
+  [10,  17.50, 1.88, 4.62, 12.75, 15.25, 16, 1.12],
+  [12,  20.50, 2.00, 5.12, 15.00, 17.75, 16, 1.25],
+  [14,  23.00, 2.12, 5.62, 16.25, 20.25, 20, 1.25],
+  [16,  25.50, 2.25, 5.75, 18.50, 22.50, 20, 1.38],
+  [18,  28.00, 2.38, 6.25, 21.00, 24.75, 24, 1.38],
+  [20,  30.50, 2.50, 6.38, 23.00, 27.00, 24, 1.38],
+  [24,  36.00, 2.75, 6.62, 27.25, 32.00, 24, 1.62]
+];
+
+// ---------------- B16.10 Class 300 valve face-to-face (inches, RF, approx.) ----------------
+// NPS, gate/ball, globe/check
+VALVE_FF_300 = [
+  [0.5,  5.50, 6.00], [0.75, 6.00, 7.00], [1, 6.50, 8.00], [1.25, 7.00, 8.50],
+  [1.5,  7.50, 9.00], [2, 8.50, 10.50], [2.5, 9.50, 11.50], [3, 11.12, 12.50],
+  [3.5, 11.50, 13.25], [4, 12.00, 14.00], [5, 15.00, 15.75], [6, 15.88, 17.50],
+  [8,   16.50, 22.00], [10, 18.00, 24.50], [12, 19.75, 28.00], [14, 30.00, 33.00],
+  [16,  33.00, 34.00], [18, 36.00, 38.50], [20, 39.00, 40.00], [24, 45.00, 53.00]
+];
+
 // ---------------- B16.10 Class 150 valve face-to-face (inches) ----------------
 // NPS, gate/ball, globe/check
 VALVE_FF = [
@@ -158,9 +193,13 @@ function bend_radius_in(nps, type="LR") =
   : type == "SR" ? max(nps, 1)
   : let(n = _int(type)) assert(n != undef, str("pipe.scad: unknown elbow type '", type, "'")) n * nps;
 
-function flange_150(nps) = _row(FLANGE_150, nps);
+// Flange class comes from pipe_run(rating=150|300) through $pipe_rating.
+function _rating() = is_undef($pipe_rating) ? 150 : $pipe_rating;
+function flange_150(nps) =
+  let(r = _rating()) assert(r == 150 || r == 300, str("pipe.scad: rating ", r, " not available yet (150 or 300)"))
+  _row(r == 300 ? FLANGE_300 : FLANGE_150, nps);
 function valve_ff_in(nps, type) =
-  let(r = _row(VALVE_FF, nps)) (type == "globe" || type == "check") ? r[2] : r[1];
+  let(r = _row(_rating() == 300 ? VALVE_FF_300 : VALVE_FF, nps)) (type == "globe" || type == "check") ? r[2] : r[1];
 function tee_c_in(nps) = _row(TEE_C, nps)[1];
 function reducer_h_in(n1, n2) = _row(REDUCER_H, max(n1, n2))[1];
 
@@ -444,10 +483,11 @@ module _label(p, txt, size) {
 
 // ======================= main module =======================
 
-module pipe_run(run, nps=4, sch="40", units="in", material="CS",
+module pipe_run(run, nps=4, sch="40", units="in", material="CS", rating=150,
                 elbow="LR", start="open", end="open", line="LINE-1",
                 hollow=false, show_welds=true, show_labels=false, stem_up=[0, 0, 1],
                 report=true, pcf=undef, $fn=48) {
+  $pipe_rating = rating;
   u = units == "mm" ? 25.4 : 1;
   chains = _chains(run, u, nps, [0, 0, 0], start, end, 0);
   welds = _welds(chains, u, elbow);
@@ -494,7 +534,7 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS",
   ru = units == "mm" ? "mm" : "ftin";
   nspools = 1 + _sum([for (c = chains) _breaks(c)]);
   if (report) {
-    echo(str("PIPE RUN ", line, ": NPS ", nps, " SCH ", sch, " ", material, ", elbows ", elbow));
+    echo(str("PIPE RUN ", line, ": NPS ", nps, " SCH ", sch, " ", material, ", CL", rating, ", elbows ", elbow));
     for (sp = [1 : nspools]) {
       cuts = [for (ci = [0 : len(chains) - 1]) let(ch = chains[ci])
                 for (k = [0 : len(ch[2]) - 1])
@@ -536,13 +576,26 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS",
                n45 > 0 ? str(", ", n45, "x 45 ell") : "",
                len(angs) - n90 - n45 > 0 ? str(", ", len(angs) - n90 - n45, "x cut ell (other angle)") : "",
                ntee > 0 ? str(", ", ntee, "x straight tee") : "",
-               nfl > 0 ? str(", ", nfl, "x WN flange CL150 RF") : "",
+               nfl > 0 ? str(", ", nfl, "x WN flange CL", rating, " RF") : "",
                ngask > 0 ? str(", ", ngask, "x gasket + ", ngask, " bolt sets (",
                                flange_150(sz)[6], " x ", bolt_dia_in(sz), "″ studs each)") : ""));
     }
     for (s = [for (ck = all) let(s = ck[0][2][ck[1]]) if (s[SEG_KIND] == "valve" || s[SEG_KIND] == "reducer") s])
-      echo(str("   ", s[SEG_KIND] == "valve" ? str("1x ", s[SEG_INFO], " valve CL150 flanged NPS ", s[SEG_NPS])
+      echo(str("   ", s[SEG_KIND] == "valve" ? str("1x ", s[SEG_INFO], " valve CL", rating, " flanged NPS ", s[SEG_NPS])
                                             : str("1x concentric reducer ", s[SEG_INFO][0], " x ", s[SEG_INFO][1])));
+
+    // Elbow cut marks for elbows that aren't a stock 90 or 45: cut from a 90.
+    cutells = [for (ck = all) let(ch = ck[0], k = ck[1], s = ch[2][k])
+                 if (s[SEG_KIND] == "pipe" && _conn_e(ch, k) == "elbow")
+                   let(a = _angle(s[SEG_DIR], ch[2][k + 1][SEG_DIR]))
+                     if (abs(a - 90) > 0.5 && abs(a - 45) > 0.5) [a, s[SEG_NPS]]];
+    if (len(cutells) > 0) {
+      echo(" ELBOW CUTS (cut from a 90, mark on the outside / centerline / inside):");
+      for (c = cutells) let(a = c[0], n = c[1], R = _R(n, elbow, u), r = pipe_od_in(n) * u / 2)
+        echo(str("   NPS ", n, " ", round(a * 10) / 10, " deg:  outside ", fmt_len((R + r) * a * PI / 180, ru),
+                 ",  centerline ", fmt_len(R * a * PI / 180, ru), ",  inside ", fmt_len((R - r) * a * PI / 180, ru),
+                 ",  take-out ", fmt_len(R * tan(a / 2), ru)));
+    }
   }
 
   // ---- PCF (Piping Component File) ----
@@ -554,7 +607,7 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS",
     echo("PCF|UNITS-BOLT-DIA INCH");
     echo("PCF|UNITS-BOLT-LENGTH INCH");
     echo(str("PCF|PIPELINE-REFERENCE ", line));
-    echo(str("PCF|    PIPING-SPEC ", material, "-", sch, "-150"));
+    echo(str("PCF|    PIPING-SPEC ", material, "-", sch, "-", rating));
     for (ci = [0 : len(chains) - 1]) {
       ch = chains[ci]; segs = ch[2];
       for (k = [0 : len(segs) - 1]) {
@@ -563,12 +616,12 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS",
           ts = _trim_s(ch, k, u, elbow); te = _trim_e(ch, k, u, elbow);
           a = s[SEG_A] + s[SEG_DIR] * ts; b = s[SEG_B] - s[SEG_DIR] * te;
           if (_conn_s(ch, k) == "flange")
-            _pcf_comp("FLANGE", [s[SEG_A], a], sn, "FLWN", str("WN FLANGE CL150 RF ", material));
+            _pcf_comp("FLANGE", [s[SEG_A], a], sn, "FLWN", str("WN FLANGE CL", rating, " RF ", material));
           if (_cut(ch, k, u, elbow) > 0)
             _pcf_comp("PIPE", [a, b], sn, "", str("PIPE SCH ", sch, " ", material),
                       str("    SPOOL-IDENTIFIER S", _spool(chains, ci, k)));
           if (_conn_e(ch, k) == "flange")
-            _pcf_comp("FLANGE", [s[SEG_B], b], sn, "FLWN", str("WN FLANGE CL150 RF ", material));
+            _pcf_comp("FLANGE", [s[SEG_B], b], sn, "FLWN", str("WN FLANGE CL", rating, " RF ", material));
           if (_conn_e(ch, k) == "elbow") {
             nx = segs[k + 1];
             ang = _angle(s[SEG_DIR], nx[SEG_DIR]);
@@ -581,7 +634,7 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS",
         } else if (kind == "valve") {
           sk = s[SEG_INFO] == "globe" ? "VGFL" : s[SEG_INFO] == "ball" ? "VBFL"
              : s[SEG_INFO] == "check" ? "VCFL" : "VVFL";
-          _pcf_comp("VALVE", [s[SEG_A], s[SEG_B]], sn, sk, str(s[SEG_INFO], " VALVE CL150 FLANGED"));
+          _pcf_comp("VALVE", [s[SEG_A], s[SEG_B]], sn, sk, str(s[SEG_INFO], " VALVE CL", rating, " FLANGED"));
         } else if (kind == "reducer") {
           echo("PCF|REDUCER-CONCENTRIC");
           echo(str("PCF|    END-POINT ", _fmt3(s[SEG_A]), " ", s[SEG_INFO][0]));

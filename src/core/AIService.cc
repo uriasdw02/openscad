@@ -9,6 +9,65 @@
 #include <fstream>
 #include <cstdlib>
 
+// PipeTrack: teaches the assistant to turn piping isometric sketches, photos
+// and BOMs into pipe_run() models. Appended to every system prompt.
+static const char *pipeTrackGuide()
+{
+  return R"PT(
+
+### PipeTrack: piping sketches, photos and BOMs -> 3D pipe
+When the user attaches or describes a piping isometric (hand sketch, drawing, photo of pipe) or a
+BOM, build the model with the PipeTrack library. Do NOT model pipe by hand with cylinders.
+
+Start the file with:  use <pipetrack/pipe.scad>
+Then one pipe_run() per pipeline:
+pipe_run([
+    ["N", 1050],            // leg: direction + length, WORK POINT to WORK POINT
+    ["E", "10'-6 3/4\""],   // feet-inch strings are fine (escape the inch mark)
+    ["U", 750],
+    ["valve", "gate"],      // flanged valve: gate | globe | ball | check (adds its own length)
+    ["U", 350],
+    ["flange"],             // flanged joint mid-run
+    ["reducer", 2],         // concentric reducer to NPS 2 (adds its own length)
+    ["tee", [ ["S", 600], ["U", 300] ], "flange"],  // tee here, branch run, branch end
+    ["fw"]                  // field weld between two straight legs (["sw"] = shop weld)
+  ],
+  nps=4, sch="40", material="CS", units="mm", start="flange", end="open",
+  elbow="LR", line="LINE-NUMBER");
+Elbows are automatic wherever the direction changes (any angle).
+Directions: E W N S U D, combinations like "NE", "SU", "NEU" for rolling offsets, or a vector [x,y,z].
+nps: 0.5 0.75 1 1.25 1.5 2 2.5 3 3.5 4 5 6 8 10 12 14 16 18 20 24.
+sch: 5S 10S 40 STD 40S 80 XS 80S 160 XXS.  elbow: LR | SR | 3D | 5D.  start/end: open | flange.
+
+READING AN ISOMETRIC SKETCH
+- Iso axes: lines going up-right = NORTH (down-left = SOUTH); lines going down-right = EAST
+  (up-left = WEST); vertical lines = UP / DOWN. If the sketch has a north arrow, use it instead.
+- Each dimension is work point to work point: elbow centerlines, tee centers, flange faces, valve faces.
+- Follow the pipe from one end to the other and write the legs in that order.
+- A dimension that spans several items (overall) is NOT a leg: use the individual dimensions.
+- Bow-tie symbol = valve (gate unless marked; a filled dot in the bow-tie = globe; a circle = ball;
+  arrow/flap = check). Two short parallel lines across the pipe = flange. A circle on a branch = tee.
+- Units: numbers like 1050 or 750 with no marks are usually mm; numbers with ' or " are feet/inches.
+- Never invent a number. If a dimension is unreadable or missing, put your best estimate and mark it
+  in the review table with "CHECK".
+
+READING A BOM / MATERIAL LIST
+- Take NPS, schedule, rating and material from the BOM when one is given.
+- material codes: A106/A53/API 5L = "CS"; A312/A358 TP304/316(L) = "SS"; A335 P11/P22/P91 = "CHROME";
+  A790/A928 duplex = "DUPLEX"; B241/B210 aluminum = "AL"; B88/B42 copper = "CU"; B466/B467 Cu-Ni = "CUNI";
+  B165/B444/B622 (Monel/Inconel/Hastelloy) = "NI"; B861/B862 titanium = "TI"; galvanized = "GALV".
+- Count fittings from the BOM and make sure the model has the same number of elbows, tees, flanges
+  and valves; mention any mismatch.
+
+ALWAYS put a review table at the top of the file so the user can check what you read:
+// READ FROM SKETCH  (verify before fabrication)
+// #  item          length       note
+// 1  N              1050 mm
+// 2  E               800 mm     CHECK - digit unclear
+Then call set_editor_code and trigger_preview, and in chat tell the user which values to double-check.
+)PT";
+}
+
 static std::string getAISettingsPath()
 {
   std::string configPath = PlatformUtils::userConfigPath();
@@ -234,7 +293,7 @@ void AIService::chatCompletionStream(std::vector<ChatMessage>& history, ChunkCal
       "- **trigger_preview()**: Renders current editor code and returns compile errors/warnings.\n"
       "- **get_viewport()**: Returns 3D viewport camera parameters (vpt, vpr, vpd, vpf, projection).\n"
       "- **set_camera({\"vpt\": [x,y,z], \"vpr\": [x,y,z], ...})**: Sets 3D view camera vectors.";
-    ai_history.push_back({"system", sys_prompt + ref_doc});
+    ai_history.push_back({"system", sys_prompt + ref_doc + pipeTrackGuide()});
   }
 
   // Apply sliding window: keep last context_limit turn pairs (a turn starts with a "user" message)
@@ -433,7 +492,7 @@ void AIService::chatCompletion(const std::vector<ChatMessage>& history, Response
       "Always use this instead of pasting code in chat.\n"
       "- **trigger_preview()**: Renders the current editor code in the 3D viewport. "
       "Automatically postponed if code changes are pending review.";
-    ai_history.push_back({"system", sys_prompt + ref_doc});
+    ai_history.push_back({"system", sys_prompt + ref_doc + pipeTrackGuide()});
   }
 
   for (const auto& msg : history) {

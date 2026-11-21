@@ -170,6 +170,22 @@ void parser_init()
 
   add_librarydir(PlatformUtils::userLibraryPath());
 
+  // PipeTrack: make `use <pipetrack/pipe.scad>` work for builds run from the
+  // source tree (build/openscad.exe -> repo root) and for installs that ship
+  // a pipetrack folder next to the program.
+  try {
+    const fs::path app = fs::absolute(fs::path(PlatformUtils::applicationPath()));
+    for (const fs::path& root : {app, app.parent_path()}) {
+      std::error_code ec;
+      if (fs::exists(root / "pipetrack" / "pipe.scad", ec)) {
+        add_librarydir(root.generic_string());
+        break;
+      }
+    }
+  } catch (const std::exception&) {
+    // application path not registered (e.g. some test runners) - skip
+  }
+
   fs::path libpath = PlatformUtils::resourcePath("libraries");
   if (!libpath.empty()) {
     add_librarydir(fs::absolute(libpath).string());
