@@ -3,7 +3,7 @@
 
 ChatInputEdit::ChatInputEdit(QWidget *parent) : QPlainTextEdit(parent)
 {
-  setPlaceholderText(tr("Ask AI..."));
+  setPlaceholderText(QString());
   setFixedHeight(50);
 }
 

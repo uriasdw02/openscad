@@ -232,13 +232,10 @@ ChatWidget::ChatWidget(QWidget *parent) : QWidget(parent)
       Qt::DirectConnection);
   });
 
-  // Initial welcome greeting
-  addMessage(_("Hello! I am your OpenSCAD AI assistant. Ask me to write some code, e.g. "
-               "\"draw a sphere\" or \"create a box with a hole\"."),
-             false);
+  // No welcome greeting: a new chat starts empty
 
   // The input box starts blank (the old "Default User Prompt" prefill is no longer used).
-  inputField->setPlaceholderText(tr("Ask AI... or attach a sketch / photo / BOM and press Send"));
+  inputField->setPlaceholderText(QString());
 
   // Initialize diff proposal banner
   diffBannerWidget = new QWidget(this);
@@ -649,16 +646,8 @@ void ChatWidget::onClearPressed()
   history.clear();
   activeToolBubble = nullptr;
 
-  addMessage(_("Hello! I am your OpenSCAD AI assistant. Ask me to write some code, e.g. "
-               "\"draw a sphere\" or \"create a box with a hole\"."),
-             false);
 
-  std::string defPrompt = aiService->getDefaultPrompt();
-  if (!defPrompt.empty()) {
-    inputField->setPlainText(QString::fromStdString(defPrompt));
-  } else {
-    inputField->clear();
-  }
+  inputField->clear();  // a new chat always starts blank
 }
 
 void ChatWidget::enableInput(bool enabled)
