@@ -68,6 +68,7 @@ private:
   MessageBubble *activeAIBubble = nullptr;
   std::shared_ptr<std::string> activeResponseText;
   bool isRequestRunning = false;
+  bool codeToolUsed = false;  // set_editor_code called during the current request
 
   std::string proposedCode;
   std::string originalCode;

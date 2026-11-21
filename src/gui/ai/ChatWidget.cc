@@ -353,6 +353,7 @@ void ChatWidget::onSendPressed()
 
   // Set active request states
   isRequestRunning = true;
+  codeToolUsed = false;
   startNewResponseTurn();
 
   // Disable input during streaming
@@ -423,10 +424,10 @@ void ChatWidget::onSendPressed()
           }
         } else if (activeResponseText) {
           this->history.push_back({"assistant", *activeResponseText});
-          // Fallback: only in interactive mode — if the model wrote a code block in
-          // chat text without calling set_editor_code, extract and propose it.
-          // In agentic mode this never runs, preventing spurious diff dialogs.
-          if (!agenticMode && !this->hasPendingCodeChanges()) {
+          // Fallback: if the model wrote a code block in chat text without calling
+          // set_editor_code (e.g. a local server without tool support), offer it
+          // with the Review & Apply banner. Skipped when a tool already applied code.
+          if (!codeToolUsed && !this->hasPendingCodeChanges()) {
             std::string text = *activeResponseText;
             size_t start = text.find("```");
             if (start != std::string::npos) {
@@ -737,6 +738,7 @@ std::string ChatWidget::executeTool(const std::string& name, const std::string& 
       result_val = "Error: No active editor found.";
     }
   } else if (name == "set_editor_code") {
+    codeToolUsed = true;
     auto args = nlohmann::json::parse(arguments_json);
     if (!args.contains("code")) {
       return "Error: Missing required argument 'code'.";
