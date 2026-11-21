@@ -457,7 +457,16 @@ void ChatWidget::onSendPressed()
             activeAIBubble = nullptr;
           }
         } else if (activeResponseText) {
-          this->history.push_back({"assistant", stripThinking(*activeResponseText)});
+          const std::string answer = stripThinking(*activeResponseText);
+          if (answer.find_first_not_of(" \t\r\n") == std::string::npos && activeAIBubble) {
+            // The model spent its whole reply thinking and never answered.
+            *activeResponseText +=
+              "\n\n**The model ran out of room while thinking and never wrote an answer.**\n"
+              "Fix: Preferences > AI > API Parameters: raise max_tokens (e.g. 8192 or 16000), "
+              "or turn thinking off with chat_template_kwargs = {\"enable_thinking\": false}.";
+            activeAIBubble->updateText(QString::fromStdString(*activeResponseText));
+          }
+          this->history.push_back({"assistant", answer});
           // Fallback: if the model wrote a code block in chat text without calling
           // set_editor_code (e.g. a local server without tool support), offer it
           // with the Review & Apply banner. Skipped when a tool already applied code.

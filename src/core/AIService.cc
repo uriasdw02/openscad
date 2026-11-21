@@ -39,9 +39,18 @@ Directions: E W N S U D, combinations like "NE", "SU", "NEU" for rolling offsets
 nps: 0.5 0.75 1 1.25 1.5 2 2.5 3 3.5 4 5 6 8 10 12 14 16 18 20 24.
 sch: 5S 10S 40 STD 40S 80 XS 80S 160 XXS.  elbow: LR | SR | 3D | 5D.  start/end: open | flange.
 
+BE DECISIVE - this matters more than being perfect:
+- Think briefly. Read the drawing once, decide, write the code. Do not re-check the same thing twice.
+- If a number is blurry or the math doesn't reconcile with the BOM, use your best reading, mark it CHECK
+  in the review table, and move on. The user verifies the table - that is their job, not yours.
+- Always finish with the code. An answer with CHECK marks is useful; no answer is not.
+
 READING AN ISOMETRIC SKETCH
-- Iso axes: lines going up-right = NORTH (down-left = SOUTH); lines going down-right = EAST
-  (up-left = WEST); vertical lines = UP / DOWN. If the sketch has a north arrow, use it instead.
+- Vertical lines = UP / DOWN. Horizontal pipe runs along the two diagonal iso axes.
+- NORTH = the iso axis the north arrow is drawn along, toward the arrowhead. No arrow: up-right = N.
+- EAST = the other diagonal axis, on the side you reach turning CLOCKWISE from north:
+    north up-right -> east down-right;   north up-left -> east up-right.
+  South and west are the opposites.
 - Each dimension is work point to work point: elbow centerlines, tee centers, flange faces, valve faces.
 - Follow the pipe from one end to the other and write the legs in that order.
 - A dimension that spans several items (overall) is NOT a leg: use the individual dimensions.
