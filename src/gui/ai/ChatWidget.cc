@@ -311,6 +311,11 @@ void ChatWidget::onSendPressed()
   }
 
   QString prompt = inputField->toPlainText().trimmed();
+  if (prompt.isEmpty() && !pendingAttachments.empty()) {
+    // An image with no text: assume it's a sketch/photo/BOM to model.
+    prompt = tr("Model this. If it is a piping sketch, isometric, photo of pipe or BOM, build it with "
+                "PipeTrack pipe_run() and include the READ FROM SKETCH review table.");
+  }
   if (prompt.isEmpty()) {
     return;
   }
