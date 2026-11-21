@@ -21,6 +21,11 @@
 //                             center, end = "open" | "flange"
 //   ["fw"] / ["sw"]           field weld / shop weld between two straight legs
 //                             (a field weld splits spools)
+//   start / end = "open" | "flange" | "fw"   ("fw": the run ends in a field weld,
+//                             e.g. right at an elbow - give the last leg as the
+//                             elbow take-out, LR take-out = 1.5 x NPS)
+//   weld_gap = root gap per butt weld (e.g. 1/16 for inches, 1.6 for mm);
+//                             cut lengths subtract it like the shop does
 //
 // Pipe (B36.10M/B36.19M), elbows (B16.9, any angle, LR/SR/nD bends), tees and
 // reducers (B16.9), class 150 WN flanges (B16.5), valves (B16.10). Nominal
@@ -333,13 +338,13 @@ function _R(n, el, u) = bend_radius_in(n, el) * u;
 // what sits at the start / end of pipe segment k of chain ch
 function _conn_s(ch, k) =
   let(segs = ch[2])
-  k == 0 ? (ch[0] == "flange" ? "flange" : ch[0] == "tee" ? "tee" : "open")
+  k == 0 ? (ch[0] == "flange" ? "flange" : ch[0] == "tee" ? "tee" : ch[0] == "fw" ? "fw" : "open")
   : let(p = segs[k - 1][SEG_KIND])
     p == "pipe" ? (_angle(segs[k - 1][SEG_DIR], segs[k][SEG_DIR]) > 0.5 ? "elbow" : "butt")
     : (p == "valve" || p == "joint") ? "flange" : p;
 function _conn_e(ch, k) =
   let(segs = ch[2])
-  k == len(segs) - 1 ? (ch[1] == "flange" ? "flange" : "open")
+  k == len(segs) - 1 ? (ch[1] == "flange" ? "flange" : ch[1] == "fw" ? "fw" : "open")
   : let(nx = segs[k + 1][SEG_KIND])
     nx == "pipe" ? (_angle(segs[k][SEG_DIR], segs[k + 1][SEG_DIR]) > 0.5 ? "elbow" : "butt")
     : (nx == "valve" || nx == "joint") ? "flange" : nx;
@@ -351,8 +356,13 @@ function _trim_e(ch, k, u, el) =
   let(c = _conn_e(ch, k), s = ch[2][k], n = s[SEG_NPS])
   c == "flange" ? _Y(n, u) : c == "tee" ? _C(n, u)
   : c == "elbow" ? _R(n, el, u) * tan(_angle(s[SEG_DIR], ch[2][k + 1][SEG_DIR]) / 2) : 0;
+function _gap() = is_undef($pipe_gap) ? 0 : $pipe_gap;
+function _gap_of(c) = c == "open" ? 0 : (c == "butt" || c == "fw" || c == "sw") ? _gap() / 2 : _gap();
 function _cut(ch, k, u, el) =
-  norm(ch[2][k][SEG_B] - ch[2][k][SEG_A]) - _trim_s(ch, k, u, el) - _trim_e(ch, k, u, el);
+  norm(ch[2][k][SEG_B] - ch[2][k][SEG_A]) - _trim_s(ch, k, u, el) - _trim_e(ch, k, u, el)
+  - _gap_of(_conn_s(ch, k)) - _gap_of(_conn_e(ch, k));
+// a leg that is only an elbow's take-out (no pipe), e.g. a run ending at an elbow
+function _ell_only(ch, k, u, el) = abs(_cut(ch, k, u, el) + _gap_of(_conn_s(ch, k)) + _gap_of(_conn_e(ch, k))) < 0.02 * u;
 
 // spool breaks: field weld, flanged joint, valve
 function _is_break(s) = s[SEG_KIND] == "fw" || s[SEG_KIND] == "joint" || s[SEG_KIND] == "valve";
@@ -366,8 +376,8 @@ function _spool(chains, ci, k) =
 // all welds, numbered in order: [point, "SW"|"FW", dir, nps, spool]
 function _welds(chains, u, el) = [
   for (ci = [0 : len(chains) - 1]) let(ch = chains[ci], segs = ch[2])
-    for (k = [0 : len(segs) - 1]) if (segs[k][SEG_KIND] == "pipe" && _cut(ch, k, u, el) > 0)
-      let(s = segs[k], cs = _conn_s(ch, k), ce = _conn_e(ch, k),
+    for (k = [0 : len(segs) - 1]) if (segs[k][SEG_KIND] == "pipe" && (_cut(ch, k, u, el) > 0 || _ell_only(ch, k, u, el)))
+      let(s = segs[k], cs = _ell_only(ch, k, u, el) ? "none" : _conn_s(ch, k), ce = _conn_e(ch, k),
           a = s[SEG_A] + s[SEG_DIR] * _trim_s(ch, k, u, el),
           b = s[SEG_B] - s[SEG_DIR] * _trim_e(ch, k, u, el),
           sp = _spool(chains, ci, k))
@@ -484,10 +494,11 @@ module _label(p, txt, size) {
 // ======================= main module =======================
 
 module pipe_run(run, nps=4, sch="40", units="in", material="CS", rating=150,
-                elbow="LR", start="open", end="open", line="LINE-1",
+                elbow="LR", start="open", end="open", line="LINE-1", weld_gap=0,
                 hollow=false, show_welds=true, show_labels=false, stem_up=[0, 0, 1],
                 report=true, pcf=undef, $fn=48) {
   $pipe_rating = rating;
+  $pipe_gap = weld_gap;
   u = units == "mm" ? 25.4 : 1;
   chains = _chains(run, u, nps, [0, 0, 0], start, end, 0);
   welds = _welds(chains, u, elbow);
@@ -538,7 +549,7 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS", rating=150,
     for (sp = [1 : nspools]) {
       cuts = [for (ci = [0 : len(chains) - 1]) let(ch = chains[ci])
                 for (k = [0 : len(ch[2]) - 1])
-                  if (ch[2][k][SEG_KIND] == "pipe" && _spool(chains, ci, k) == sp)
+                  if (ch[2][k][SEG_KIND] == "pipe" && _spool(chains, ci, k) == sp && !_ell_only(ch, k, u, elbow))
                     [_cut(ch, k, u, elbow), ch[2][k][SEG_NPS]]];
       if (len(cuts) > 0) {
         echo(str(" SPOOL S", sp, ":"));

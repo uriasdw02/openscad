@@ -51,6 +51,23 @@ READING AN ISOMETRIC SKETCH
 - Never invent a number. If a dimension is unreadable or missing, put your best estimate and mark it
   in the review table with "CHECK".
 
+FABRICATION ISOS (Isogen / MSUITE / Spoolgen style)
+- The NORTH ARROW is usually top-left; lines parallel to it are N/S. Use it over the default axes.
+- A dimension marked with * that "includes F/Trim allowance" is the work-point dimension to the
+  field-trim end; model it as-is with that end "open" and note the trim in the review table.
+- A dimension in (parentheses) next to another is the CUT length, not a work-point dimension.
+  Use it only to check your model: cut = WP dim - fitting take-outs - weld gaps.
+- Circled letters (A, B, ...) are BOM item numbers. FW28, FW29 in a bubble = numbered field welds.
+  "CONT. ON C# 248057" = the line continues on another drawing (the run ends there).
+- A run that ends AT an elbow in a field weld: last leg = the elbow take-out only
+  (LR = 1.5 x NPS, e.g. 3 for 2") and end="fw".
+- TP / tie point = where the spool connects in the field.
+- Shop isos usually use weld_gap = 1/16 (inches); if the BOM cut matches WP - take-out - 1/16, set it.
+Example (2" Sch 10S 304/304L, one LR elbow, field-trim end, ends in FW at the elbow):
+  pipe_run([ ["U", "8'-8 15/16\""], ["N", 3] ], nps=2, sch="10S", material="SS",
+           units="in", start="open", end="fw", weld_gap=1/16, line="2-PAr-320");
+  -> cut 8'-5 7/8" (matches the BOM).
+
 READING A BOM / MATERIAL LIST
 - Take NPS, schedule, rating and material from the BOM when one is given.
 - material codes: A106/A53/API 5L = "CS"; A312/A358 TP304/316(L) = "SS"; A335 P11/P22/P91 = "CHROME";
