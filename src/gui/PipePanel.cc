@@ -156,11 +156,16 @@ PipePanel::PipePanel(MainWindow *window) : QDockWidget(tr("Pipe Builder"), windo
   auto *applyRow = new QHBoxLayout;
   live_ = new QCheckBox(tr("Live preview"));
   live_->setChecked(true);
+  drawing_ = new QCheckBox(tr("Iso drawing"));
+  drawing_->setToolTip(tr("Show a clean 2D isometric drawing with dimensions and cut list instead of the 3D model.\n"
+                          "Export it with File > Export > Export as PDF / SVG / DXF."));
+  connect(drawing_, &QCheckBox::toggled, this, &PipePanel::scheduleLive);
   auto *build = new QPushButton(tr("Build model"));
   build->setDefault(true);
   build->setStyleSheet("font-weight: bold;");
   connect(build, &QPushButton::clicked, this, [this] { apply(true); });
   applyRow->addWidget(live_);
+  applyRow->addWidget(drawing_);
   applyRow->addStretch();
   applyRow->addWidget(build);
   v->addLayout(applyRow);
@@ -349,9 +354,9 @@ QString PipePanel::generateCode(QStringList& problems) const
   code += QString("  nps = %1, sch = \"%2\", material = \"%3\", rating = %4, units = \"%5\",\n")
             .arg(nps_->currentText(), sch_->currentText(), material_->currentText(), rating_->currentText(),
                  units_->currentText());
-  code += QString("  start = \"%1\", end = \"%2\", elbow = \"%3\", line = \"%4\");\n")
+  code += QString("  start = \"%1\", end = \"%2\", elbow = \"%3\", line = \"%4\"%5);\n")
             .arg(start_->currentText(), end_->currentText(), elbow_->currentText(),
-                 line_->text().replace("\"", "'"));
+                 line_->text().replace("\"", "'"), QString(drawing_->isChecked() ? ", drawing = true" : ""));
   return code;
 }
 

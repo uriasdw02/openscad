@@ -46,5 +46,6 @@ private:
   QComboBox *nps_, *sch_, *material_, *rating_, *units_, *start_, *end_, *elbow_;
   QTableWidget *table_;
   QCheckBox *live_;
+  QCheckBox *drawing_;
   QTimer liveTimer_;
 };

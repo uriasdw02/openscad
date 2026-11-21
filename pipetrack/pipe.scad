@@ -26,6 +26,8 @@
 //   start / end = "open" | "flange" | "fw"   ("fw": the run ends in a field weld,
 //                             e.g. right at an elbow - give the last leg as the
 //                             elbow take-out, LR take-out = 1.5 x NPS)
+//   drawing = true            draw a clean 2D isometric (dimensions, symbols, cut list)
+//                             instead of the 3D model - File > Export > PDF/SVG/DXF
 //   weld_gap = root gap per butt weld (e.g. 1/16 for inches, 1.6 for mm);
 //                             cut lengths subtract it like the shop does
 //
@@ -510,7 +512,7 @@ module _label(p, txt, size) {
 module pipe_run(run, nps=4, sch="40", units="in", material="CS", rating=150,
                 elbow="LR", start="open", end="open", line="LINE-1", weld_gap=0,
                 hollow=false, show_welds=true, show_labels=false, stem_up=[0, 0, 1],
-                report=true, pcf=undef, $fn=48) {
+                report=true, pcf=undef, drawing=false, $fn=48) {
   $pipe_rating = rating;
   $pipe_gap = weld_gap;
   $pipe_elbow = elbow;
@@ -522,40 +524,46 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS", rating=150,
   do_pcf = pcf != undef ? pcf : (is_undef($pipe_pcf) ? false : $pipe_pcf);
 
   // ---- 3D ----
-  color(col)
-    for (ci = [0 : len(chains) - 1]) {
-      ch = chains[ci]; segs = ch[2]; n = len(segs);
-      for (k = [0 : n - 1]) {
-        s = segs[k]; kind = s[SEG_KIND]; sn = s[SEG_NPS];
-        if (kind == "pipe") {
-          a = s[SEG_A] + s[SEG_DIR] * _trim_s(ch, k, u, elbow);
-          b = s[SEG_B] - s[SEG_DIR] * _trim_e(ch, k, u, elbow);
-          if (_cut(ch, k, u, elbow) > 0) {
-            od = pipe_od_in(sn) * u;
-            _tube(a, b, od, hollow ? od - 2 * pipe_wall_in(sn, sch) * u : 0);
+  if (!drawing) {
+    color(col)
+      for (ci = [0 : len(chains) - 1]) {
+        ch = chains[ci]; segs = ch[2]; n = len(segs);
+        for (k = [0 : n - 1]) {
+          s = segs[k]; kind = s[SEG_KIND]; sn = s[SEG_NPS];
+          if (kind == "pipe") {
+            a = s[SEG_A] + s[SEG_DIR] * _trim_s(ch, k, u, elbow);
+            b = s[SEG_B] - s[SEG_DIR] * _trim_e(ch, k, u, elbow);
+            if (_cut(ch, k, u, elbow) > 0) {
+              od = pipe_od_in(sn) * u;
+              _tube(a, b, od, hollow ? od - 2 * pipe_wall_in(sn, sch) * u : 0);
+            }
+            if (_conn_s(ch, k) == "flange") _wn_flange(s[SEG_A], -s[SEG_DIR], sn, u);
+            if (_conn_e(ch, k) == "flange") _wn_flange(s[SEG_B],  s[SEG_DIR], sn, u);
+            if (_conn_e(ch, k) == "elbow")
+              _elbow(s[SEG_B], s[SEG_DIR], segs[k + 1][SEG_DIR], _R(sn, elbow, u), pipe_od_in(sn) * u);
+          } else if (kind == "valve") {
+            _valve(s[SEG_A], s[SEG_B], s[SEG_INFO], sn, u, stem_up);
+          } else if (kind == "reducer") {
+            _reducer(s[SEG_A], s[SEG_B], s[SEG_INFO][0], s[SEG_INFO][1], u);
+          } else if (kind == "tee") {
+            _tee(s[SEG_A], s[SEG_DIR], _dir(s[SEG_INFO][0][0][0]), sn, u);
           }
-          if (_conn_s(ch, k) == "flange") _wn_flange(s[SEG_A], -s[SEG_DIR], sn, u);
-          if (_conn_e(ch, k) == "flange") _wn_flange(s[SEG_B],  s[SEG_DIR], sn, u);
-          if (_conn_e(ch, k) == "elbow")
-            _elbow(s[SEG_B], s[SEG_DIR], segs[k + 1][SEG_DIR], _R(sn, elbow, u), pipe_od_in(sn) * u);
-        } else if (kind == "valve") {
-          _valve(s[SEG_A], s[SEG_B], s[SEG_INFO], sn, u, stem_up);
-        } else if (kind == "reducer") {
-          _reducer(s[SEG_A], s[SEG_B], s[SEG_INFO][0], s[SEG_INFO][1], u);
-        } else if (kind == "tee") {
-          _tee(s[SEG_A], s[SEG_DIR], _dir(s[SEG_INFO][0][0][0]), sn, u);
         }
       }
-    }
 
-  if (show_welds)
-    for (w = welds) color(w[1] == "FW" ? [0.85, 0.1, 0.1] : [0.12, 0.12, 0.12])
-      _weld_bead(w[0], w[2], pipe_od_in(w[3]) * u * 1.03);
+    if (show_welds)
+      for (w = welds) color(w[1] == "FW" ? [0.85, 0.1, 0.1] : [0.12, 0.12, 0.12])
+        _weld_bead(w[0], w[2], pipe_od_in(w[3]) * u * 1.03);
 
-  if (show_labels && len(welds) > 0)
-    color([0.1, 0.1, 0.6])
-      for (i = [0 : len(welds) - 1]) let(w = welds[i], od = pipe_od_in(w[3]) * u)
-        _label(w[0] + [0, 0, od * 1.2], str(w[1] == "FW" ? "FW" : "W", i + 1), od * 0.6);
+    if (show_labels && len(welds) > 0)
+      color([0.1, 0.1, 0.6])
+        for (i = [0 : len(welds) - 1]) let(w = welds[i], od = pipe_od_in(w[3]) * u)
+          _label(w[0] + [0, 0, od * 1.2], str(w[1] == "FW" ? "FW" : "W", i + 1), od * 0.6);
+
+  }
+
+  // ---- 2D clean iso drawing (export with File > Export > PDF / SVG / DXF) ----
+  if (drawing) _iso_drawing(chains, welds, u, elbow, units, line, nps, sch, material, rating);
 
   // ---- report ----
   ru = units == "mm" ? "mm" : "ftin";
@@ -686,4 +694,142 @@ module _pcf_comp(type, ends, nps, skey, desc, extra1="", extra2="") {
   if (extra2 != "") echo(str("PCF|", extra2));
   if (skey != "") echo(str("PCF|    SKEY ", skey));
   echo(str("PCF|    ITEM-DESCRIPTION ", desc));
+}
+
+
+// ======================= 2D clean isometric drawing =======================
+// Iso projection: east = down-right, north = up-right, up = up.
+function _iso(p) = [(p[0] + p[1]) * cos(30), (p[1] - p[0]) * sin(30) + p[2]];
+function _iso_dir(d) = let(v = _iso(d)) v / norm(v);
+function _perp2(v) = [-v[1], v[0]];
+function _read_ang(v) = let(a = atan2(v[1], v[0])) a > 90.01 ? a - 180 : a <= -89.99 ? a + 180 : a;
+function _ascii(s) = chr([for (c = s) c == "″" ? 34 : ord(c)]);
+function _join(v, sep, i=0) = i >= len(v) ? "" : str(v[i], i < len(v) - 1 ? sep : "", _join(v, sep, i + 1));
+function _dim_text(L, units) = units == "mm" ? str(round(L)) : _ascii(fmt_ftin(L));
+
+module _seg2d(a, b, w) {
+  hull() { translate(a) circle(d=w, $fn=12); translate(b) circle(d=w, $fn=12); }
+}
+module _txt2d(p, t, size, ang=0) {
+  translate(p) rotate(ang) text(t, size=size, halign="center", valign="center",
+                                font="Liberation Sans:style=Bold", $fn=24);
+}
+module _txt2d_left(p, t, size) {
+  translate(p) text(t, size=size, halign="left", valign="center", font="Liberation Mono", $fn=24);
+}
+module _flange2d(p, v, size, w) {   // double bar across the pipe at p
+  n = _perp2(v);
+  for (o = [0, size * 0.4]) let(q = p + v * o) _seg2d(q - n * size, q + n * size, w * 0.8);
+}
+
+module _iso_drawing(chains, welds, u, elbow, units, line, nps, sch, material, rating) {
+  pts = [for (ch = chains) for (s = ch[2]) each [_iso(s[SEG_A]), _iso(s[SEG_B])]];
+  minx = min([for (p = pts) p[0]]); maxx = max([for (p = pts) p[0]]);
+  miny = min([for (p = pts) p[1]]); maxy = max([for (p = pts) p[1]]);
+  ext = max(maxx - minx, maxy - miny, 1);
+  w = ext / 230;          // line weight
+  ts = ext / 48;          // text size
+  ctr = [(minx + maxx) / 2, (miny + maxy) / 2];
+
+  // pipe centerlines, work point to work point
+  for (ch = chains) for (s = ch[2]) if (s[SEG_KIND] == "pipe")
+    _seg2d(_iso(s[SEG_A]), _iso(s[SEG_B]), w);
+
+  // fittings and symbols
+  for (ci = [0 : len(chains) - 1]) let(ch = chains[ci], segs = ch[2], n = len(segs)) {
+    // end flanges
+    if (ch[0] == "flange" && segs[0][SEG_KIND] == "pipe")
+      _flange2d(_iso(segs[0][SEG_A]), _iso_dir(segs[0][SEG_DIR]), ts * 0.8, w);
+    if (ch[1] == "flange" && segs[n - 1][SEG_KIND] == "pipe")
+      _flange2d(_iso(segs[n - 1][SEG_B]), -_iso_dir(segs[n - 1][SEG_DIR]), ts * 0.8, w);
+    for (k = [0 : n - 1]) let(s = segs[k], a = _iso(s[SEG_A]), b = _iso(s[SEG_B]),
+                              v = _iso_dir(s[SEG_DIR]), nn = _perp2(v), h = ts * 0.75) {
+      if (s[SEG_KIND] == "valve") {
+        mid = (a + b) / 2;
+        polygon([a + nn * h, a - nn * h, mid]);
+        polygon([b + nn * h, b - nn * h, mid]);
+        _flange2d(a - v * h * 0.3, v, h * 1.15, w);
+        _flange2d(b - v * h * 0.1, v, h * 1.15, w);
+        stem = abs(v[1]) > 0.9 ? nn : [0, 1];
+        top = mid + stem * h * 1.9;
+        _seg2d(mid, top, w * 0.6);
+        _seg2d(top - _perp2(stem) * h * 0.8, top + _perp2(stem) * h * 0.8, w * 0.9);
+        _txt2d(top + stem * ts * 0.9, s[SEG_INFO] == "gate" ? "GV" : s[SEG_INFO] == "globe" ? "GLV"
+                                      : s[SEG_INFO] == "ball" ? "BV" : "CV", ts * 0.6);
+      } else if (s[SEG_KIND] == "joint") {
+        _flange2d(a - v * ts * 0.3, v, ts * 0.8, w);
+      } else if (s[SEG_KIND] == "tee") {
+        translate(a) circle(d=w * 3.4, $fn=24);
+      } else if (s[SEG_KIND] == "reducer") {
+        polygon([a + nn * h * 0.8, b + nn * h * 0.45, b - nn * h * 0.45, a - nn * h * 0.8]);
+        _txt2d((a + b) / 2 + nn * ts * 1.4, str(s[SEG_INFO][0], "x", s[SEG_INFO][1], " RED"), ts * 0.6, _read_ang(v));
+      }
+    }
+  }
+
+  // welds: dots for shop welds, ringed and labeled for field welds
+  if (len(welds) > 0) for (i = [0 : len(welds) - 1]) let(wd = welds[i], p = _iso(wd[0])) {
+    if (wd[1] == "FW") {
+      translate(p) difference() { circle(r=ts * 0.55, $fn=32); circle(r=ts * 0.42, $fn=32); }
+      _txt2d(p + [ts * 1.4, ts * 0.9], str("FW", i + 1), ts * 0.6);
+    } else {
+      translate(p) circle(d=w * 2.6, $fn=16);
+    }
+  }
+
+  // dimensions on every pipe leg, placed on the outside of the drawing
+  for (ch = chains) for (k = [0 : len(ch[2]) - 1]) let(s = ch[2][k])
+    if (s[SEG_KIND] == "pipe" && norm(s[SEG_B] - s[SEG_A]) > 1e-6 && !_ell_only(ch, k, u, elbow))
+      let(a = _iso(s[SEG_A]), b = _iso(s[SEG_B]), v = _iso_dir(s[SEG_DIR]), nn = _perp2(v),
+          mid = (a + b) / 2,
+          // put the dimension on the side AWAY from the legs this one connects to
+          segs = ch[2], last = len(segs) - 1,
+          adj = (k > 0 && segs[k - 1][SEG_KIND] == "pipe" ? -_iso_dir(segs[k - 1][SEG_DIR]) : [0, 0])
+              + (k < last && segs[k + 1][SEG_KIND] == "pipe" ? _iso_dir(segs[k + 1][SEG_DIR]) : [0, 0]),
+          lean = adj * nn,
+          side = lean > 0.05 ? -1 : lean < -0.05 ? 1
+               : abs(v[1]) > 0.9 ? (nn[0] >= 0 ? 1 : -1)      // lone vertical: dimension on the right
+               : ((mid - ctr) * nn >= 0 ? 1 : -1),            // otherwise: outside of the drawing
+          o = nn * side * ts * 1.6, a2 = a + o, b2 = b + o, tick = (v + nn) * ts * 0.3) {
+        _seg2d(a2, b2, w * 0.3);
+        _seg2d(a + nn * side * ts * 0.4, a2 + nn * side * ts * 0.3, w * 0.25);
+        _seg2d(b + nn * side * ts * 0.4, b2 + nn * side * ts * 0.3, w * 0.25);
+        _seg2d(a2 - tick, a2 + tick, w * 0.45);
+        _seg2d(b2 - tick, b2 + tick, w * 0.45);
+        _txt2d((a2 + b2) / 2 + nn * side * ts * 0.8, _dim_text(norm(s[SEG_B] - s[SEG_A]), units), ts,
+               _read_ang(v));
+      }
+
+  // north arrow
+  na = [minx - ts * 2, maxy + ts * 3];
+  nd = _iso_dir([0, 1, 0]);
+  _seg2d(na, na + nd * ts * 3.2, w * 1.1);
+  translate(na + nd * ts * 3.2) rotate(atan2(nd[1], nd[0])) polygon([[0, ts * 0.6], [ts * 1.2, 0], [0, -ts * 0.6]]);
+  _txt2d(na + nd * ts * 5, "N", ts * 1.4);
+
+  // title block + cut list
+  ru = units == "mm" ? "mm" : "ftin";
+  nspools = 1 + _sum([for (c = chains) _breaks(c)]);
+  cutlines = [for (sp = [1 : nspools])
+                let(cuts = [for (ci = [0 : len(chains) - 1]) let(ch = chains[ci])
+                              for (k = [0 : len(ch[2]) - 1])
+                                if (ch[2][k][SEG_KIND] == "pipe" && _spool(chains, ci, k) == sp
+                                    && !_ell_only(ch, k, u, elbow))
+                                  _dim_text(max(0, _cut(ch, k, u, elbow)), units)])
+                if (len(cuts) > 0) str("  S", sp, ": ", _join(cuts, ",  "))];
+  title = concat([
+    str("LINE ", line),
+    str(nps, "\" SCH ", sch_norm(sch), "  ", material, "  CL", rating, "  ELBOWS ", elbow),
+    str("DIMENSIONS ", units == "mm" ? "mm" : "FT-IN", ", WORK POINT TO WORK POINT"),
+    str("WELDS ", len(welds), "  (", len([for (x = welds) if (x[1] == "FW") 1]), " FIELD)"),
+    "CUT LIST:"], cutlines);
+  ty = miny - ts * 4;
+  for (i = [0 : len(title) - 1]) _txt2d_left([minx, ty - i * ts * 1.5], title[i], ts * 0.75);
+  // frame around the title block
+  bw = ts * 0.75 * 0.62 * max([for (t = title) len(t)]) + ts;
+  bh = len(title) * ts * 1.5 + ts * 0.4;
+  translate([minx - ts * 0.5, ty + ts]) difference() {
+    translate([0, -bh]) square([bw, bh]);
+    translate([w * 0.5, -bh + w * 0.5]) square([bw - w, bh - w]);
+  }
 }

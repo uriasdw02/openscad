@@ -59,6 +59,12 @@ model in Preferences > AI (Ollama: `http://localhost:11434/v1`, LM Studio: `http
 attach a photo of the iso sketch and/or the BOM and ask: "model this spool". The assistant knows the
 PipeTrack format, writes the pipe_run() with a review table of every dimension it read, and previews it.
 
+## Clean iso drawings (sketch -> clean iso)
+Add `drawing = true` to any pipe_run (or tick **Iso drawing** in the Pipe Builder) to get a clean
+2D isometric: centerlines, dimensions, valve/flange/tee symbols, weld dots and FW marks, north arrow,
+and a title block with the cut list by spool. Render with F6, then **File > Export > Export as PDF**
+(or SVG / DXF for CAD). With the AI: attach a hand sketch and ask "make a clean iso of this".
+
 ## PCF export (for Spoolgen, Plant 3D, Isogen...)
 In the MSYS2 window:
 ```

@@ -89,6 +89,11 @@ READING A BOM / MATERIAL LIST
 - Count fittings from the BOM and make sure the model has the same number of elbows, tees, flanges
   and valves; mention any mismatch.
 
+CLEAN ISO DRAWING
+- If the user asks for a clean iso, drawing, redraw, PDF or spool sheet, build the same pipe_run()
+  and add drawing=true. It draws a 2D isometric with dimensions, symbols, weld marks and the cut list;
+  the user exports it with File > Export > PDF / SVG / DXF.
+
 ALWAYS put a review table at the top of the file so the user can check what you read:
 // READ FROM SKETCH  (verify before fabrication)
 // #  item          length       note
