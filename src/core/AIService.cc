@@ -30,7 +30,8 @@ pipe_run([
     ["flange"],             // flanged joint mid-run
     ["reducer", 2],         // concentric reducer to NPS 2 (adds its own length)
     ["tee", [ ["S", 600], ["U", 300] ], "flange"],  // tee here, branch run, branch end
-    ["fw"]                  // field weld between two straight legs (["sw"] = shop weld)
+    ["fw"],                 // field weld between two straight legs (["sw"] = shop weld)
+    ["ell", "N"]            // last item only: turn north with an elbow and END at the elbow
   ],
   nps=4, sch="40", material="CS", units="mm", start="flange", end="open",
   elbow="LR", line="LINE-NUMBER");
@@ -57,6 +58,9 @@ READING AN ISOMETRIC SKETCH
 - Bow-tie symbol = valve (gate unless marked; a filled dot in the bow-tie = globe; a circle = ball;
   arrow/flap = check). Two short parallel lines across the pipe = flange. A circle on a branch = tee.
 - Units: numbers like 1050 or 750 with no marks are usually mm; numbers with ' or " are feet/inches.
+  Keep the drawing's units: if it says 8'-8 15/16" write units="in" and ["U", "8'-8 15/16\""].
+  Never convert feet-inches to mm.
+- Stainless schedules end in the letter S: 5S, 10S, 40S, 80S (not 105 / 405).
 - Never invent a number. If a dimension is unreadable or missing, put your best estimate and mark it
   in the review table with "CHECK".
 
@@ -68,12 +72,12 @@ FABRICATION ISOS (Isogen / MSUITE / Spoolgen style)
   Use it only to check your model: cut = WP dim - fitting take-outs - weld gaps.
 - Circled letters (A, B, ...) are BOM item numbers. FW28, FW29 in a bubble = numbered field welds.
   "CONT. ON C# 248057" = the line continues on another drawing (the run ends there).
-- A run that ends AT an elbow in a field weld: last leg = the elbow take-out only
-  (LR = 1.5 x NPS, e.g. 3 for 2") and end="fw".
+- A run that ends AT an elbow (into a field weld or "CONT. ON"): finish with ["ell", dir] and end="fw".
+  NEVER invent a stub length for a leg that has no dimension.
 - TP / tie point = where the spool connects in the field.
 - Shop isos usually use weld_gap = 1/16 (inches); if the BOM cut matches WP - take-out - 1/16, set it.
 Example (2" Sch 10S 304/304L, one LR elbow, field-trim end, ends in FW at the elbow):
-  pipe_run([ ["U", "8'-8 15/16\""], ["N", 3] ], nps=2, sch="10S", material="SS",
+  pipe_run([ ["U", "8'-8 15/16\""], ["ell", "N"] ], nps=2, sch="10S", material="SS",
            units="in", start="open", end="fw", weld_gap=1/16, line="2-PAr-320");
   -> cut 8'-5 7/8" (matches the BOM).
 

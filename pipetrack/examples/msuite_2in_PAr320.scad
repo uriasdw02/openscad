@@ -13,7 +13,7 @@ use <../pipe.scad>
 
 pipe_run([
     ["U", "8'-8 15/16\""],   // F/Trim end up to elbow B
-    ["N", 3]                  // elbow B take-out, ends at FW28
+    ["ell", "N"]              // elbow B turns north, ends at FW28
   ],
   nps = 2, sch = "10S", material = "SS", units = "in",
   start = "open", end = "fw", weld_gap = 1/16,

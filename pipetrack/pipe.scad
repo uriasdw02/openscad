@@ -19,6 +19,8 @@
 //   ["reducer", nps2]         concentric reducer to nps2 (adds its length)
 //   ["tee", [branch run], end]  straight tee here; branch run starts at the tee
 //                             center, end = "open" | "flange"
+//   ["ell", dir]              turn with an elbow toward dir and STOP at the elbow's
+//                             far end (a run that ends at an elbow, e.g. into a FW)
 //   ["fw"] / ["sw"]           field weld / shop weld between two straight legs
 //                             (a field weld splits spools)
 //   start / end = "open" | "flange" | "fw"   ("fw": the run ends in a field weld,
@@ -177,8 +179,14 @@ function _row(table, nps) =
 function pipe_od_in(nps) = _row(PIPE_OD, nps)[1];
 
 // Schedule names: 5S 10S 40 STD 40S 80 XS 80S 160 XXS
-function pipe_wall_in(nps, sch) =
-  let(r = _row(PIPE_WALL, nps),
+// Misreads from drawings ("105" for 10S, "405" for 40S...) are corrected.
+function sch_norm(sch) =
+  let(s = is_num(sch) ? str(sch) : sch)
+  s == "105" ? "10S" : s == "55" ? "5S" : s == "405" ? "40S" : s == "805" ? "80S"
+  : s == "10s" ? "10S" : s == "5s" ? "5S" : s == "40s" ? "40S" : s == "80s" ? "80S"
+  : s == "std" ? "STD" : s == "xs" ? "XS" : s == "xxs" ? "XXS" : s;
+function pipe_wall_in(nps, sch_in) =
+  let(sch = sch_norm(sch_in), r = _row(PIPE_WALL, nps),
       w = sch == "5S"  ? r[1]
         : sch == "10S" ? r[2]
         : sch == "40"  ? r[3]
@@ -282,7 +290,7 @@ function _fmt3(p) = str(round(p[0] * 10) / 10, " ", round(p[1] * 10) / 10, " ", 
 
 function _is_leg(it) =
   len(it) == 2 && (is_num(it[1]) || is_string(it[1])) && (is_list(it[0]) ||
-    (is_string(it[0]) && it[0] != "valve" && it[0] != "reducer" && it[0] != "tee"));
+    (is_string(it[0]) && it[0] != "valve" && it[0] != "reducer" && it[0] != "tee" && it[0] != "ell"));
 
 function _next_dir(run, i) =
   i >= len(run) ? [1,0,0] : _is_leg(run[i]) ? _dir(run[i][0]) : _next_dir(run, i + 1);
@@ -298,6 +306,12 @@ function _segments(run, u, nps, pos, i=0, last=undef, acc=[]) =
   : let(it = run[i], cur = last == undef ? _next_dir(run, i) : last)
     _is_leg(it)
       ? let(d = _dir(it[0]), p = pos + d * _L(it[1], u))
+        _segments(run, u, nps, p, i + 1, d, concat(acc, [[pos, p, "pipe", d, "", nps]]))
+    : it[0] == "ell"
+      ? assert(last != undef, "pipe.scad: [\"ell\", dir] needs a leg before it")
+        let(d = _dir(it[1]),
+            el = is_undef($pipe_elbow) ? "LR" : $pipe_elbow,
+            p = pos + d * bend_radius_in(nps, el) * u * tan(_angle(last, d) / 2))
         _segments(run, u, nps, p, i + 1, d, concat(acc, [[pos, p, "pipe", d, "", nps]]))
     : it[0] == "valve"
       ? let(t = len(it) > 1 ? it[1] : "gate", p = pos + cur * valve_ff_in(nps, t) * u)
@@ -499,6 +513,8 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS", rating=150,
                 report=true, pcf=undef, $fn=48) {
   $pipe_rating = rating;
   $pipe_gap = weld_gap;
+  $pipe_elbow = elbow;
+  _sch_ok = pipe_wall_in(nps, sch);   // unknown schedule -> clear error now, not later
   u = units == "mm" ? 25.4 : 1;
   chains = _chains(run, u, nps, [0, 0, 0], start, end, 0);
   welds = _welds(chains, u, elbow);
@@ -545,7 +561,7 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS", rating=150,
   ru = units == "mm" ? "mm" : "ftin";
   nspools = 1 + _sum([for (c = chains) _breaks(c)]);
   if (report) {
-    echo(str("PIPE RUN ", line, ": NPS ", nps, " SCH ", sch, " ", material, ", CL", rating, ", elbows ", elbow));
+    echo(str("PIPE RUN ", line, ": NPS ", nps, " SCH ", sch_norm(sch), " ", material, ", CL", rating, ", elbows ", elbow));
     for (sp = [1 : nspools]) {
       cuts = [for (ci = [0 : len(chains) - 1]) let(ch = chains[ci])
                 for (k = [0 : len(ch[2]) - 1])
@@ -582,7 +598,7 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS", rating=150,
       ntee = len([for (ck = all) let(s = ck[0][2][ck[1]]) if (s[SEG_KIND] == "tee" && s[SEG_NPS] == sz) 1]);
       ngask = _sum([for (ck = all) let(s = ck[0][2][ck[1]])
                       if (s[SEG_NPS] == sz) (s[SEG_KIND] == "joint" ? 1 : s[SEG_KIND] == "valve" ? 2 : 0)]);
-      echo(str("   NPS ", sz, ": pipe ", fmt_len(pipe_len, ru), " SCH ", sch,
+      echo(str("   NPS ", sz, ": pipe ", fmt_len(pipe_len, ru), " SCH ", sch_norm(sch),
                n90 > 0 ? str(", ", n90, "x 90 ", elbow, " ell") : "",
                n45 > 0 ? str(", ", n45, "x 45 ell") : "",
                len(angs) - n90 - n45 > 0 ? str(", ", len(angs) - n90 - n45, "x cut ell (other angle)") : "",
@@ -618,7 +634,7 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS", rating=150,
     echo("PCF|UNITS-BOLT-DIA INCH");
     echo("PCF|UNITS-BOLT-LENGTH INCH");
     echo(str("PCF|PIPELINE-REFERENCE ", line));
-    echo(str("PCF|    PIPING-SPEC ", material, "-", sch, "-", rating));
+    echo(str("PCF|    PIPING-SPEC ", material, "-", sch_norm(sch), "-", rating));
     for (ci = [0 : len(chains) - 1]) {
       ch = chains[ci]; segs = ch[2];
       for (k = [0 : len(segs) - 1]) {
@@ -629,7 +645,7 @@ module pipe_run(run, nps=4, sch="40", units="in", material="CS", rating=150,
           if (_conn_s(ch, k) == "flange")
             _pcf_comp("FLANGE", [s[SEG_A], a], sn, "FLWN", str("WN FLANGE CL", rating, " RF ", material));
           if (_cut(ch, k, u, elbow) > 0)
-            _pcf_comp("PIPE", [a, b], sn, "", str("PIPE SCH ", sch, " ", material),
+            _pcf_comp("PIPE", [a, b], sn, "", str("PIPE SCH ", sch_norm(sch), " ", material),
                       str("    SPOOL-IDENTIFIER S", _spool(chains, ci, k)));
           if (_conn_e(ch, k) == "flange")
             _pcf_comp("FLANGE", [s[SEG_B], b], sn, "FLWN", str("WN FLANGE CL", rating, " RF ", material));
