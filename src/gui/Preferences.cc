@@ -1734,6 +1734,8 @@ void Preferences::loadAIParams(const QString& profileName)
       valQS = valJson.get<bool>() ? "true" : "false";
     } else if (valJson.is_string()) {
       valQS = QString::fromStdString(valJson.get<std::string>());
+    } else if (valJson.is_object() || valJson.is_array()) {
+      valQS = QString::fromStdString(valJson.dump());  // e.g. chat_template_kwargs
     } else {
       valQS = "";
     }
@@ -1787,6 +1789,10 @@ void Preferences::saveAIParams()
       paramsObj[keyStr] = true;
     } else if (valText.toLower() == "false") {
       paramsObj[keyStr] = false;
+    } else if (valText.trimmed().startsWith('{') || valText.trimmed().startsWith('[')) {
+      // JSON objects/arrays, e.g. chat_template_kwargs = {"enable_thinking": false}
+      auto parsed = nlohmann::json::parse(valText.toStdString(), nullptr, false);
+      paramsObj[keyStr] = parsed.is_discarded() ? nlohmann::json(valText.toStdString()) : parsed;
     } else {
       paramsObj[keyStr] = valText.toStdString();
     }
