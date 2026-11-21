@@ -17,7 +17,10 @@ pipe_run([
     ["U",  750],
     ["valve", "gate"],    // inline flanged valve: gate | globe | ball | check
     ["U",  350],
-    ["flange"]            // optional flanged joint mid-run
+    ["flange"],           // flanged joint (gasket + bolts in BOM)
+    ["reducer", 2],       // concentric reducer to 2"
+    ["tee", [ ["N", 500] ], "flange"],   // tee with a branch run
+    ["fw"],               // field weld (splits spools); ["sw"] = shop weld
   ],
   nps=4, sch="40", material="CS", units="mm",
   start="flange", end="flange", elbow="LR");
@@ -31,7 +34,9 @@ pipe_run([
 | material | `CS SS CHROME AL CU CUNI NI TI DUPLEX GALV` (more can be added) |
 | elbow | `LR`, `SR`, or bend radius `3D`, `5D`... |
 | start / end | `open` or `flange` |
-| units | `mm` or `in` |
+| units | `mm` or `in` (lengths can also be feet-inch strings like `"10'-6 3/4\""` in any units) |
+| line | line number for reports and PCF, e.g. `"CW-6-101"` |
+| show_labels | `true` shows weld numbers in 3D (red = field weld) |
 
 JSON form (same data, for the AI and for exports):
 ```json
@@ -40,10 +45,22 @@ JSON form (same data, for the AI and for exports):
   "run": [["N",1050],["E",800],["U",750],["valve","gate"],["U",350]] }
 ```
 
+## What the console shows (Window > Console after F5)
+- **Cut list by spool** (S1, S2...; spools break at field welds, flanged joints and valves)
+- **Weld map**: W1, W2... shop welds and FW field welds with spool and location
+- **BOM** per size: pipe length, elbows (90 / 45 / cut), tees, WN flanges, gaskets, stud bolts, valves, reducers
+
+## PCF export (for Spoolgen, Plant 3D, Isogen...)
+In the MSYS2 window:
+```
+./pipetrack/export-pcf.sh pipetrack/examples/tee_reducer_fieldweld.scad
+```
+writes `tee_reducer_fieldweld.pcf` next to the model.
+
 ## Data sources
 Nominal values from ASME B36.10M / B36.19M (pipe), B16.9 (elbows), B16.5 class 150 (WN flanges)
 and B16.10 (valve face-to-face). Meant for modeling; verify against spec sheets before fabrication.
 
 ## Coming next
-Tees and reducers, class 300+ flanges, socket weld / threaded, BOM upload (material and specs),
-sketch reading through a local vision model, PCF / IFC export.
+Pipe panel (point-and-click), sketch + BOM reading through a local vision model, printable spool
+sheets, class 300+ flanges, socket weld / threaded, reducing tees, O-lets, elbow cut marks, IFC export.
