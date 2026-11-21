@@ -69,6 +69,10 @@ private:
   std::shared_ptr<std::string> activeResponseText;
   bool isRequestRunning = false;
   bool codeToolUsed = false;  // set_editor_code called during the current request
+  size_t loopCheckedLen = 0;   // repetition check bookkeeping for the streaming reply
+  bool loopRetried = false;    // already retried this prompt with thinking off
+  bool sendingLoopRetry = false;
+  void handleRepetitionLoop();
 
   std::string proposedCode;
   std::string originalCode;

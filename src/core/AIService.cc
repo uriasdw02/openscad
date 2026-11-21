@@ -222,6 +222,13 @@ void AIService::chatCompletionStream(std::vector<ChatMessage>& history, ChunkCal
     }
     return;
   }
+  if (!param_overrides_json.empty()) {
+    auto overrides = nlohmann::json::parse(param_overrides_json, nullptr, false);
+    if (overrides.is_object()) {
+      if (!config.parameters.is_object()) config.parameters = nlohmann::json::object();
+      for (auto& el : overrides.items()) config.parameters[el.key()] = el.value();
+    }
+  }
 
   int max_auto_turns = 5;
   if (config.parameters.contains("max_auto_turns") &&
@@ -454,6 +461,13 @@ void AIService::chatCompletion(const std::vector<ChatMessage>& history, Response
       on_error(error_msg);
     }
     return;
+  }
+  if (!param_overrides_json.empty()) {
+    auto overrides = nlohmann::json::parse(param_overrides_json, nullptr, false);
+    if (overrides.is_object()) {
+      if (!config.parameters.is_object()) config.parameters = nlohmann::json::object();
+      for (auto& el : overrides.items()) config.parameters[el.key()] = el.value();
+    }
   }
 
   std::vector<AIChatMessage> ai_history;

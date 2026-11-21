@@ -70,7 +70,12 @@ public:
   using HistoryDrainCallback = std::function<void(std::vector<ChatMessage>& history)>;
   void registerHistoryDrainCallback(HistoryDrainCallback callback);
 
+  // Extra request parameters (JSON object text) merged over the active profile's,
+  // e.g. to retry with thinking off. Pass "" to clear.
+  void setParameterOverrides(const std::string& json_object) { param_overrides_json = json_object; }
+
 private:
+  std::string param_overrides_json;
   class Impl;
   std::unique_ptr<Impl> impl;
 };

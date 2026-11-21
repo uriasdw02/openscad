@@ -43,6 +43,20 @@ std::string stripThinking(std::string text)
   return text;
 }
 
+// True when the tail of the reply already appears at least twice earlier:
+// small local models sometimes repeat the same paragraph until they run out of tokens.
+bool isRepeating(const std::string& text)
+{
+  const size_t tail_len = 240;
+  if (text.size() < 4 * tail_len) return false;
+  const std::string tail = text.substr(text.size() - tail_len);
+  int count = 0;
+  for (size_t pos = text.find(tail); pos != std::string::npos; pos = text.find(tail, pos + 1)) {
+    if (++count >= 3) return true;
+  }
+  return false;
+}
+
 // Last fenced code block in the answer (models usually put the final version last).
 std::string lastCodeBlock(const std::string& text)
 {
@@ -385,6 +399,12 @@ void ChatWidget::onSendPressed()
   // Set active request states
   isRequestRunning = true;
   codeToolUsed = false;
+  loopCheckedLen = 0;
+  if (!sendingLoopRetry) {
+    loopRetried = false;
+    aiService->setParameterOverrides("");
+  }
+  sendingLoopRetry = false;
   startNewResponseTurn();
 
   // Disable input during streaming
@@ -400,6 +420,13 @@ void ChatWidget::onSendPressed()
         if (!*alive || !isRequestRunning) return;
         *activeResponseText += chunk;
         activeAIBubble->updateText(QString::fromStdString(*activeResponseText));
+        if (activeResponseText->size() >= loopCheckedLen + 800) {
+          loopCheckedLen = activeResponseText->size();
+          if (isRepeating(*activeResponseText)) {
+            handleRepetitionLoop();
+            return;
+          }
+        }
         // Auto-scroll to bottom
         this->scrollArea->verticalScrollBar()->setValue(
           this->scrollArea->verticalScrollBar()->maximum());
@@ -648,6 +675,39 @@ void ChatWidget::onClearPressed()
 
 
   inputField->clear();  // a new chat always starts blank
+}
+
+void ChatWidget::handleRepetitionLoop()
+{
+  aiService->cancelPendingRequests();
+  if (activeAIBubble && activeResponseText) {
+    *activeResponseText += "\n\n*[Stopped: the model was repeating itself.]*";
+    activeAIBubble->updateText(QString::fromStdString(*activeResponseText));
+  }
+  isRequestRunning = false;
+  activeAIBubble = nullptr;
+  activeResponseText = nullptr;
+  enableInput(true);
+  agentModeCheckBox->setEnabled(true);
+
+  if (loopRetried) {
+    addMessage(tr("The model got stuck again. Try a sharper image, give the size/units in your message, "
+                  "or turn thinking off in Preferences > AI (chat_template_kwargs = "
+                  "{\"enable_thinking\": false})."),
+               false);
+    return;
+  }
+  // Retry once with thinking off and a nudge against repeating.
+  loopRetried = true;
+  aiService->setParameterOverrides(
+    R"({"chat_template_kwargs": {"enable_thinking": false}, "repeat_penalty": 1.15, "presence_penalty": 0.6})");
+  QTimer::singleShot(0, this, [this] {
+    inputField->setPlainText(
+      tr("You were repeating yourself. Stop analyzing. Write the code now from your best reading of the "
+         "image, and mark every uncertain value CHECK in the review table."));
+    sendingLoopRetry = true;
+    onSendPressed();
+  });
 }
 
 void ChatWidget::enableInput(bool enabled)
